@@ -135,7 +135,11 @@ export function CrewCard({ state }: { state: State }) {
     <motion.section layout className="card crew" transition={{ duration: 0.3, ease: EASE }}>
       <header className="card-head">
         Crew
-        {r && <span className="card-meta">{confirmed} of {r.acks.expected.length} confirmed release {r.number}</span>}
+        {r && (
+          <span className="card-meta">
+            {r.acks.expected.length ? `${confirmed} of ${r.acks.expected.length} confirmed release ${r.number}` : `no call times changed in release ${r.number}`}
+          </span>
+        )}
       </header>
       <ul className="people">
         {state.crew.map((c) => {
@@ -151,15 +155,16 @@ export function CrewCard({ state }: { state: State }) {
               <span className="call">{c.call_time ? hhmm(c.call_time, tz) : "--:--"}</span>
               <AnimatePresence mode="popLayout" initial={false}>
                 <motion.span
-                  key={ok ? `ok${r!.number}` : late ? "late" : "none"}
+                  key={ok ? `ok${r!.number}` : late ? "late" : c.acked_release ? `carry${c.acked_release}` : "none"}
                   className="state"
-                  data-tone={ok ? "go" : late ? "hold" : "none"}
+                  data-tone={ok ? "go" : late ? "hold" : c.acked_release ? "carry" : "none"}
+                  title={!ok && !late && c.acked_release ? "Their call time did not change, so their earlier confirmation still holds." : undefined}
                   initial={{ opacity: 0, scale: 0.6, filter: "blur(4px)" }}
                   animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
                   exit={{ opacity: 0, scale: 0.6, filter: "blur(4px)" }}
                   transition={{ type: "spring", duration: 0.3, bounce: 0 }}
                 >
-                  {ok ? <><Check size={11} weight="bold" /> r{r!.number}</> : late ? `on r${c.acked_release ?? "–"}` : "—"}
+                  {ok ? <><Check size={11} weight="bold" /> r{r!.number}</> : late ? (c.acked_release ? `on r${c.acked_release}` : "waiting") : c.acked_release ? <><Check size={11} weight="bold" /> r{c.acked_release}</> : "—"}
                 </motion.span>
               </AnimatePresence>
             </li>

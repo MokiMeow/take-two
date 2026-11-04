@@ -199,3 +199,4 @@
   text-transform: uppercase;
   color: var(--go);
 }
+.state[data-tone="carry"] { color: var(--faint); background: #ffffff0a; }

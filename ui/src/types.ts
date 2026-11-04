@@ -68,6 +68,8 @@ export interface Candidate {
   story_cost: string;
   check: { result: CheckResult; reasons: string[] };
   manifest: Manifest;
+  // For options that re-plan several scenes at once: one row per scene.
+  schedule?: Manifest[] | null;
   manifest_hash: string;
   preview_url?: string;
   preview_status: "none" | "rendering" | "ready" | "failed";

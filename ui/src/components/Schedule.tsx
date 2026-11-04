@@ -18,7 +18,7 @@ import type { CSSProperties } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { Candidate, Scene, ScenePlan, State } from "../types";
 import { hhmm, title } from "../format";
-import { clash, dayWindow, marks, type Mark } from "../story";
+import { clash, dayWindow, marks, rowsOf, type Mark } from "../story";
 import "./Schedule.css";
 
 // Scene colours, in order of scene number.
@@ -44,6 +44,9 @@ export function Schedule({ state, ghosts, focus, onFocus }: Props) {
   const m = marks(state);
   const d = state.decision;
   const showOptions = d && (d.status === "open" || d.status === "closed_outdated");
+  // Options sit under the last scene they re-plan.
+  const optionScenes = new Set((d?.candidates ?? []).flatMap((c) => rowsOf(c).map((m) => m.scene_id)));
+  const anchorId = [...state.scenes].reverse().find((x) => optionScenes.has(x.id))?.id;
   const passing = d?.candidates.filter((c) => c.check.result === "pass") ?? [];
   const ruled = d?.candidates.filter((c) => c.check.result !== "pass") ?? [];
   const valid = state.scenes.filter((s) => s.validity === "valid" && s.plan);
@@ -70,7 +73,7 @@ export function Schedule({ state, ghosts, focus, onFocus }: Props) {
             <div key={s.id}>
               <SceneRow scene={s} ghost={ghosts[s.id]} pos={pos} frac={frac} tz={tz} marks={m} dim={!!focus && !focus.startsWith(s.id)} />
               <AnimatePresence initial={false}>
-                {showOptions && d!.candidates[0]?.manifest.scene_id === s.id && (
+                {showOptions && anchorId === s.id && (
                   <motion.div
                     className="opts"
                     initial={{ opacity: 0, height: 0 }}
@@ -92,6 +95,7 @@ export function Schedule({ state, ghosts, focus, onFocus }: Props) {
                         focused={focus === `${s.id}:${c.candidate_id}`}
                         onFocus={onFocus}
                         sceneId={s.id}
+                        numbers={Object.fromEntries(state.scenes.map((x) => [x.id, x.number]))}
                       />
                     ))}
                   </motion.div>
@@ -196,17 +200,15 @@ function Ghost({ plan, pos, frac }: { plan: ScenePlan; pos: (s: string) => numbe
   );
 }
 
-function OptionRow({ c, letter, index, stale, pos, frac, tz, marks: m, focused, onFocus, sceneId }: {
+function OptionRow({ c, letter, index, stale, pos, frac, tz, marks: m, focused, onFocus, sceneId, numbers }: {
   c: Candidate; letter: string | null; index: number; stale: boolean; pos: (s: string) => number;
   frac: (a: string, b: string) => number; tz: string; marks: Mark[]; focused: boolean;
-  onFocus: (id: string | null) => void; sceneId: string;
+  onFocus: (id: string | null) => void; sceneId: string; numbers: Record<string, number>;
 }) {
-  const mf = c.manifest;
   const out = c.check.result !== "pass";
-  const hit = clash(m, mf.people, mf.end);
-  const w = frac(mf.start, mf.end);
-  // Where the block crosses a hard stop, the overrun is drawn in coral.
-  const over = hit ? Math.max(0, Math.min(1, (pos(mf.end) - pos(hit.at)) / (pos(mf.end) - pos(mf.start)))) : 0;
+  const rows = rowsOf(c);
+  const first = rows[0];
+  const last = rows[rows.length - 1];
   const id = `${sceneId}:${c.candidate_id}`;
   return (
     <motion.div
@@ -223,17 +225,28 @@ function OptionRow({ c, letter, index, stale, pos, frac, tz, marks: m, focused, 
       <div className="row-label opt-label">
         <i className="opt-letter" data-out={out}>{letter ?? "×"}</i>
         <span className="row-title">{c.label}</span>
-        <small>{out ? c.check.reasons[0] ?? "Fails a check" : `${hhmm(mf.start, tz)}–${hhmm(mf.end, tz)}`}</small>
+        <small>{out ? c.check.reasons[0] ?? "Fails a check" : `${hhmm(first.start, tz)}–${hhmm(last.end, tz)}`}</small>
       </div>
       <div className="track track-opt">
-        <div className="block" style={{ transform: `translateX(${pos(mf.start)}%)` }}>
-          <div className="face face-opt" style={{ transform: `scaleX(${w})` }}>
-            {over > 0 && <div className="overrun" style={{ width: `${over * 100}%` }} />}
-          </div>
-          <BlockText w={w}>
-            <span className="block-loc">{title(mf.location)}</span>
-          </BlockText>
-        </div>
+        {rows.map((mf) => {
+          const w = frac(mf.start, mf.end);
+          const hit = clash(m, mf.people, mf.end);
+          // Where the block crosses a hard stop, the overrun is drawn in coral.
+          const over = hit ? Math.max(0, Math.min(1, (pos(mf.end) - pos(hit.at)) / (pos(mf.end) - pos(mf.start)))) : 0;
+          return (
+            <div key={mf.scene_id + mf.start} className="block" style={{ transform: `translateX(${pos(mf.start)}%)` }}>
+              <div className="face face-opt" style={{ transform: `scaleX(${w})` }}>
+                {over > 0 && <div className="overrun" style={{ width: `${over * 100}%` }} />}
+              </div>
+              <BlockText w={w}>
+                <span className="block-loc">
+                  {rows.length > 1 ? `Sc ${numbers[mf.scene_id] ?? "?"}` : ""}
+                  {rows.length > 1 && w < NARROW ? "" : `${rows.length > 1 ? " · " : ""}${title(mf.location)}`}
+                </span>
+              </BlockText>
+            </div>
+          );
+        })}
       </div>
     </motion.div>
   );

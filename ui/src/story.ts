@@ -26,7 +26,7 @@ export function who(crew: CrewMember[], raw: string | undefined): string {
     const tail = raw.slice(1).split(":")[0].split("-").pop() ?? raw;
     return nameOf(crew, tail);
   }
-  return raw;
+  return nameOf(crew, raw);
 }
 const personOf = (authority: string) => who([], authority);
 
@@ -76,11 +76,13 @@ export function story(s: State): Story {
   if (d?.status === "open") {
     const pass = d.candidates.filter((c) => c.check.result === "pass").length;
     const out = d.candidates.length - pass;
-    const scene = s.scenes.find((x) => x.id === d.candidates[0]?.manifest.scene_id);
+    const nums = [...new Set(d.candidates.flatMap(rowsOf).map((m) => s.scenes.find((x) => x.id === m.scene_id)?.number))]
+      .filter((n): n is number => n != null)
+      .sort((a, b) => a - b);
     return {
       tone: "ask",
-      headline: `${personOf(d.authority)} needs to pick a new plan for Scene ${scene?.number ?? ""}.`.replace(" .", "."),
-      detail: `${pass} option${pass === 1 ? "" : "s"} passed every check${out ? `, ${out} ruled out` : ""}. Answer by ${hhmm(d.expires_at, tz)}.`,
+      headline: `${d.authority_name ?? personOf(d.authority)} needs to pick a new plan for Scene${nums.length > 1 ? "s" : ""} ${listJoin(nums.map(String))}.`,
+      detail: `${whyNow(s)}${pass} option${pass === 1 ? "" : "s"} passed every check${out ? `, ${out} ruled out` : ""}. Answer by ${hhmm(d.expires_at, tz)}.`,
     };
   }
   if (d?.status === "closed_outdated") {
@@ -114,10 +116,27 @@ export function story(s: State): Story {
   return { tone: "calm", headline: "No plan released yet.", detail: "The first release goes out once the day is scheduled." };
 }
 
+// The newest recorded change, as a sentence with a trailing space, or nothing.
+function whyNow(s: State): string {
+  const c = s.changes.find((x) => x.status === "recorded");
+  return c ? `${changeSentence(s, c)} ` : "";
+}
+
 export function changeSentence(s: State, c: State["changes"][number]): string {
   const tz = s.production.timezone;
   if (c.entity === "person" && /stop|leave/.test(c.field)) return `${nameOf(s.crew, c.target)} must leave at ${hhmm(asInstant(s, c.value) ?? c.value, tz)}.`;
+  const t = (v: string) => hhmm(asInstant(s, v) ?? v, tz);
+  const who = nameOf(s.crew, c.target);
+  if (c.entity === "person" && c.field === "late_by") return `${who} is ${c.value} minutes late.`;
+  if (c.entity === "person" && c.field === "available") return `${who} is available from ${t(c.value.split(/[-/]/)[0])}.`;
   if (c.entity === "location" && c.field === "permission") return `${title(c.target)} permission ${c.value}.`;
+  if (c.entity === "location" && c.field === "light_until") return `Usable light at the ${c.target} ends at ${t(c.value)}.`;
+  if (c.entity === "location" && c.field === "window") return `The ${c.target} is only available ${c.value}.`;
+  if (c.entity === "capability") return `${title(c.target).replace(/^Sound Recorder$/, "The sound recorder")} is ${c.value}.`;
+  if (c.entity === "scene" && c.field === "overrun") {
+    const n = s.scenes.find((x) => x.id === c.target)?.number ?? c.target;
+    return `Scene ${n} ran ${c.value} minutes over.`;
+  }
   return `${title(c.target)} ${c.field.replace(/_/g, " ")}: ${c.value}.`;
 }
 
@@ -158,6 +177,11 @@ export function clash(m: Mark[], people: string[], end: string): Mark | undefine
   return m.find((k) => k.who && people.includes(k.who) && new Date(end) > new Date(k.at));
 }
 
+// Every scene an option re-plans: its schedule when it has one, otherwise its single manifest.
+export function rowsOf(c: Candidate) {
+  return c.schedule && c.schedule.length ? c.schedule : [c.manifest];
+}
+
 export function sceneOf(s: State, c: Candidate): Scene | undefined {
   return s.scenes.find((x) => x.id === c.manifest.scene_id);
 }
@@ -166,7 +190,7 @@ export function sceneOf(s: State, c: Candidate): Scene | undefined {
 export function dayWindow(s: State): { from: number; to: number } {
   const times: number[] = [];
   for (const sc of s.scenes) if (sc.plan) times.push(+new Date(sc.plan.start), +new Date(sc.plan.end));
-  for (const c of s.decision?.candidates ?? []) times.push(+new Date(c.manifest.start), +new Date(c.manifest.end));
+  for (const c of s.decision?.candidates ?? []) for (const m of rowsOf(c)) times.push(+new Date(m.start), +new Date(m.end));
   for (const m of marks(s)) times.push(+new Date(m.at));
   // "Now" widens the board only on the shoot day itself.
   const now = +new Date(s.production.now);

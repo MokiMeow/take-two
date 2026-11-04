@@ -5,19 +5,38 @@ Source license: Apache-2.0 limited by modified Commons Clause; see LICENSE.switc
 Changed: Windows-native generation, no credential printing, project-owned paths.
 """
 from pathlib import Path
+import argparse
+import os
 import secrets
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = Path('E:/DevDrive/switch')
 EXPECTED_COMMIT = '989225d8a13f6f36359c54f52d86aec01c4e0826'
 
 
-def prepare() -> None:
+def source_path(value: str | None = None) -> Path:
+    cache = ROOT / 'data/switch-source.txt'
+    configured = value or os.environ.get('SWITCH_SOURCE') or (cache.read_text(encoding='utf-8').strip() if cache.exists() else None)
+    if not configured:
+        raise ValueError('Set SWITCH_SOURCE or pass --source with the pinned Switch checkout path.')
+    return Path(configured).resolve(strict=True)
+
+
+def prepare(value: str | None = None) -> None:
     """Create fresh env files only; an existing secret is never rotated."""
-    head = (SOURCE / '.git/HEAD').read_text().strip()
-    actual = (SOURCE / '.git' / head.removeprefix('ref: ')).read_text().strip() if head.startswith('ref: ') else head
+    source = source_path(value)
+    head = (source / '.git/HEAD').read_text().strip()
+    ref = source / '.git' / head.removeprefix('ref: ')
+    if head.startswith('ref: '):
+        packed = source / '.git/packed-refs'
+        actual = ref.read_text().strip() if ref.exists() else next((line.split()[0] for line in packed.read_text().splitlines()
+            if line.endswith(' ' + head.removeprefix('ref: '))), '') if packed.exists() else ''
+    else:
+        actual = head
     if actual != EXPECTED_COMMIT:
         raise RuntimeError('Switch checkout differs from the required commit; refusing to build.')
+    cache = ROOT / 'data/switch-source.txt'
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(str(source) + '\n', encoding='utf-8', newline='\n')
     destination = ROOT / 'scripts/switch/.env'
     if not destination.exists():
         values = dict(
@@ -44,9 +63,10 @@ def prepare() -> None:
             'SWITCH_PRODUCTION_ROOM_ID=\nSWITCH_CREW_ROOM_IDS=\n'
             'TAKE_TWO_DIRECTOR_ID=\nTAKE_TWO_PRODUCER_ID=\nTAKE_TWO_AD_ID=\n'
             'TAKE_TWO_DB=./data/ledger.sqlite\nTAKE_TWO_ARTIFACTS=./out\n', encoding='utf-8', newline='\n')
-    (ROOT / 'scripts/switch/LICENSE.switch').write_bytes((SOURCE / 'LICENSE').read_bytes())
     print('Prepared local configuration; secret values were not printed.')
 
 
 if __name__ == '__main__':
-    prepare()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source')
+    prepare(parser.parse_args().source)

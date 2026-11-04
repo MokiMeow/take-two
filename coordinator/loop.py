@@ -14,23 +14,25 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
-from coordinator.checker import manifest_hash
 from coordinator.worker_text import extract_reply
 from coordinator.constraints import Constraints, Manifest
 from coordinator.ui_models import ChangeCommand, ChangeResponse, State
-from coordinator.workflow_models import ADReply, SupervisorReply, visible_candidate, release_snapshot, apply_change, check_candidate, normalize_outcome, note_constraints, workflow_transaction
+from coordinator.workflow_models import ADReply, SupervisorReply, visible_candidate, normalize_outcome, note_constraints, workflow_transaction
 from coordinator.switch_models import Question, QuestionOption, QuestionPayload
 from coordinator.render_props import hhmm
-from coordinator.presentation import person_name, person_label, resolved_change_at
+from coordinator.presentation import person_name
 
 IST = ZoneInfo('Asia/Kolkata')
 
+from coordinator.cards import CardTransitions
+from coordinator.changes import ChangeTransitions
+from coordinator.reports import ReportTransitions
 from coordinator.release import ReleaseTransitions
-from coordinator.schedules import check_schedule, digest, plans, retained_plans
+from coordinator.schedules import digest, plans
 
 from coordinator.planning import PlanningTransitions
 
-class Loop(ReleaseTransitions, PlanningTransitions):
+class Loop(ReportTransitions, ChangeTransitions, CardTransitions, ReleaseTransitions, PlanningTransitions):
     def __init__(self, ledger: Any, switch: Any, constraints: Constraints, renderer: Any = None, *,
                  authorities: dict[str, list[str]] | None = None, worker_ids: dict[str, str] | None = None,
                  worker_names: dict[str,str] | None = None,
@@ -52,6 +54,7 @@ class Loop(ReleaseTransitions, PlanningTransitions):
         self.identity_names: dict[str, str] = {}
         self.identity_roles: dict[str, str] = {}
         self.room_names: dict[str, str] = {}
+        self.crew_ids: dict[str, str] = {}
         saved = ledger.get_meta('workflow')
         self.workflow = saved or dict(constraints=constraints.model_dump(mode='json'), jobs=[], question=None,
             closed_questions=[], outcomes=[], candidates=[], holds={}, source_responses={}, releases={})
@@ -75,6 +78,13 @@ class Loop(ReleaseTransitions, PlanningTransitions):
         self.workflow['constraints'] = self.constraints.model_dump(mode='json')
         self.ledger.set_meta('workflow', self.workflow)
         if state is not None:
+            if state['releases']:
+                from coordinator.duties import personal_changes
+                internal = self.workflow['releases'].get(state['releases'][0]['release_id'], {})
+                if internal.get('envelope'):
+                    changes = personal_changes(state,self.workflow,internal['envelope']['manifest'],self.metadata)
+                    for person in state['crew']:
+                        person['since_confirmed'] = changes.get(person['id'], [])
             state['production']['now'] = self._stamp()
             state['timeline'] = state['timeline'][:200]
             state['changes'], state['releases'] = state['changes'][:200], state['releases'][:200]
@@ -97,6 +107,7 @@ class Loop(ReleaseTransitions, PlanningTransitions):
         return value.get('script_rev') == self.constraints.script_rev and value.get('constraints_rev') == self.constraints.constraints_rev
 
     def _invalidate(self, state: dict[str, Any]) -> None:
+        self._close_cards(state)
         for job in self.workflow['jobs']:
             if job['status'] in ('queued','running'):
                 job['status'] = 'cancelled'
@@ -124,54 +135,8 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                             authenticated: bool = True) -> ChangeResponse:
         command = ChangeCommand.model_validate(command)
         async with self.lock:
-            key = f'{source}:{source_message_id}' if source_message_id else None
-            prior = self.ledger.get_meta(f'change_source:{key}') if key else None
-            if prior:
-                return ChangeResponse.model_validate(prior)
-            state = self._state()
-            status,reason,facts = apply_change(command,self.constraints,self.authorities if authenticated else {},self._now(),
-                plans=self.workflow.get('plans',{}))
-            change_id = str(uuid4())
-            response = ChangeResponse(change_id=change_id,status=status,reason=reason)
             with workflow_transaction(self):
-                if facts is not None:
-                    self.constraints = facts
-                    if command.field != 'verified_facts':
-                        self.workflow['decision_round']=1
-                    self._invalidate(state)
-                    state['revisions'] = dict(script=facts.script_rev,constraints=facts.constraints_rev)
-                if command.entity == 'scene' and command.field == 'safety' and status == 'recorded':
-                    if command.value == 'hold':
-                        self.workflow['holds'][command.target] = dict(reporter=command.reporter, at=self._stamp())
-                    else:
-                        self.workflow['holds'].pop(command.target, None)
-                stamp = self._stamp()
-                at = resolved_change_at(command, facts, stamp) if facts is not None else stamp
-                state['changes'].insert(0,dict(**command.model_dump(),id=change_id,at=at,recorded_at=stamp,
-                    reporter_name=person_name(command.reporter,self.identity_names),status=status,source=source,
-                    constraints_rev=self.constraints.constraints_rev if status=='recorded' else None))
-                label = person_label(command.reporter,self.identity_names,self.identity_roles)
-                self._event(state,'change',f'{label}: {command.target} {command.field} {command.value} ({status}).',change_id)
-                affected = self._affected(command,state) if facts is not None or status=='recorded' else list(self.workflow.get('unresolved',[]))
-                if status == 'recorded':
-                    self._hold(state,affected,f'{command.target} {command.field} {command.value}',change_id)
-                    state['jobs'] = []
-                    if affected:
-                        eligible = [sid for sid in affected if sid not in self.workflow['holds'] and
-                            next(s for s in self.constraints.scenes if s.id==sid).status != 'held']
-                        if eligible:
-                            self._job(state,'script-supervisor',dict(change=command.model_dump(),scene_ids=eligible,
-                                current_schedule=list(self.workflow.get('plans',{}).values())))
-                        else:
-                            self._queue('message',dict(body='Safety hold recorded. Named clearance is required before planning a replacement.'),f'safety-wait:{change_id}')
-                elif status == 'pending_confirmation' and command.value in ('refused','unknown'):
-                    self._hold(state,affected,'Report requires confirmation',change_id)
-                if status != 'recorded':
-                    self._queue('message',dict(body=f'Change {status}: {reason or "authority confirmation required"}.'),f'change-result:{change_id}')
-                if key:
-                    self.ledger.set_meta(f'change_source:{key}',response.model_dump())
-                self._save(state)
-            return response
+                return self._record_change(command, source=source, source_message_id=source_message_id, authenticated=authenticated)
 
     def _job(self, state: dict[str, Any], role: str, context: dict[str, Any]) -> None:
         job_id = str(uuid4())
@@ -219,12 +184,20 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                 job = next((j for j in self.workflow['jobs'] if j['job_id']==data.get('job_id')),None)
             except (ValueError,TypeError,AttributeError,RecursionError):
                 data, job = {}, None
+            ambiguous_jobs = []
             if not job and isinstance(data,dict) and not data.get('job_id'):
                 active = [j for j in self.workflow['jobs'] if j['status'] in ('queued','running')]
                 if self.worker_ids:
                     active = [j for j in active if self.worker_ids.get(j['role']) == sender_id]
                 job = active[0] if len(active) == 1 else None
+                if len(active)>1 and sender_id in self.worker_ids.values():
+                    ambiguous_jobs = active
             with workflow_transaction(self):
+                if ambiguous_jobs:
+                    for pending in ambiguous_jobs:
+                        self._retry(state,pending,'Malformed reply cannot identify one active job')
+                    self._save(state)
+                    return False
                 if not job or not self._bound(job) or job['status'] not in ('queued','running'):
                     self._event(state,'stale_reply','Discarded an obsolete worker reply.',data.get('job_id'))
                     self._save(state)
@@ -241,6 +214,8 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                 try:
                     if self.coordinator_id and data.get('addressed_to') != self.coordinator_id:
                         raise ValueError('Reply must address coordinator')
+                    if job['context'].get('task') == 'extract_change':
+                        return self._extraction_reply(state, job, data)
                     reply = (SupervisorReply if job['role']=='script-supervisor' else ADReply).model_validate(data)
                     if isinstance(reply,ADReply) and len({c.candidate_id for c in reply.candidates}) != len(reply.candidates):
                         raise ValueError('Duplicate candidate ids')
@@ -332,6 +307,11 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                     return False
                 self.workflow['outcomes'] = [*self.workflow['outcomes'],key][-200:]
                 self._queue('mark_delivered',dict(request_id=request_id,session_id=session_id),f'delivered:{key}')
+                card = self.workflow.get('cards', {}).get(request_id)
+                if card:
+                    accepted = self._card_outcome(state, card, outcome)
+                    self._save(state)
+                    return accepted
                 q = self.workflow['question']
                 if not q or q['request_id']!=request_id or q['session_id']!=session_id or not self._bound(q) or q['status'] not in ('open','expired'):
                     self._event(state,'stale_reply','Ignored an outcome for an obsolete decision.',request_id)
@@ -408,27 +388,6 @@ class Loop(ReleaseTransitions, PlanningTransitions):
         state['jobs']=[]
         self._job(state,'script-supervisor',dict(scene_ids=sorted(scene_ids),change=dict(director_note=note)))
 
-    async def confirm(self,person: str,release_id: str) -> bool:
-        async with self.lock:
-            state = self._state()
-            current = state['releases'][0] if state['releases'] else None
-            if not current or self.workflow.get('unresolved') or person not in {c['id'] for c in state['crew']} or current['release_id']!=release_id or current['status']!='published':
-                with workflow_transaction(self):
-                    name = next((p['name'] for p in state['crew'] if p['id']==person),'Crew member')
-                    self._event(state,'stale_reply',f'{name}: confirmation does not identify the current published release.',release_id)
-                    self._save(state)
-                return False
-            with workflow_transaction(self):
-                if person in current['acks']['expected'] and person not in {a['person'] for a in current['acks']['confirmed']}:
-                    current['acks']['confirmed'].append(dict(person=person,at=self._stamp()))
-                    for crew in state['crew']:
-                        if crew['id']==person:
-                            crew['acked_release']=current['number']
-                    name = next((p['name'] for p in state['crew'] if p['id']==person),'Crew member')
-                    self._event(state,'ack',f'{name} confirmed {release_id}.',release_id)
-                self._save(state)
-            return True
-
     async def tick(self,now: datetime | None = None) -> None:
         async with self.lock:
             now = now or self._now()
@@ -448,6 +407,7 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                 if q and q['status']=='open' and now>=datetime.fromisoformat(q['expires_at']):
                     self._expire(state,q)
                     self._queue('close_question',dict(request_id=q['request_id']),f"close:{q['request_id']}")
+                self._tick_cards(state, now)
                 self._sync_jobs(state)
                 self._save(state)
 

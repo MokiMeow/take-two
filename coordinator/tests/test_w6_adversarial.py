@@ -95,7 +95,7 @@ async def test_light_change_runs_delegate_check_decide_release_and_confirm(tmp_p
     await rt.loop.publication_result('r2','production','sent')
     state=rt.ledger.snapshot_state()
     assert all(s['validity']=='valid' for s in state['scenes'])
-    assert state['releases'][0]['acks']['expected']==[]
+    assert state['releases'][0]['acks']['expected']==['maya','dev','leela']
     assert not await rt.loop.confirm('intruder','r2')
     assert await rt.loop.confirm('maya','r2')
     assert state['releases'][0]['acks']['confirmed']==[]

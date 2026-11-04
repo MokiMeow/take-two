@@ -15,7 +15,8 @@ class PlanningTransitions:
             if self.ledger.get_meta('plan_source:'+message_id):
                 return False
             with workflow_transaction(self):
-                if day!='day-1' or sender not in self.authorities.get('creative',[]) or state['releases'] or self.workflow['jobs']:
+                planning_started = any(j['context'].get('task') != 'extract_change' for j in self.workflow['jobs'])
+                if day!='day-1' or sender not in self.authorities.get('creative',[]) or state['releases'] or planning_started:
                     self._event(state,'error','Initial /plan requires the authenticated director, day-1 and an unplanned production.',message_id)
                     self._queue('message',dict(body='Initial plan was not started. Use /plan day-1 as the named director before any release.'),'plan-rejected:'+message_id)
                     self._save(state)

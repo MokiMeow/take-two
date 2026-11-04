@@ -28,7 +28,7 @@ from scripts.demo_switch import (ROOT, Mattermost, Stream,
 from scripts.prepare_renderer import prepare
 from scripts.reset_demo import reset_ledger
 
-DIRECTORY=ROOT/'data/w6-demo'
+DIRECTORY=ROOT/'data/w8-demo'
 FIXTURES=ROOT/'fixtures/ui-state/day'
 
 
@@ -48,15 +48,15 @@ def normalized(state: dict[str,Any]) -> dict[str,Any]:
     """Discard transport IDs/wall clocks; preserve all operational decisions."""
     decision=state.get('decision')
     return dict(revisions=state['revisions'],scenes=state['scenes'],
-        changes=[{k:c[k] for k in ('entity','target','field','value','status','constraints_rev')} for c in state['changes']],
+        changes=[{k:c.get(k) for k in ('entity','target','field','value','status','constraints_rev','resolution')} for c in state['changes']],
         jobs=[dict(role=j['role'],status=j['status']) for j in state['jobs']],
         decision=None if not decision else dict(status=decision['status'],bound=decision['bound'],
             candidates=[{k:c.get(k) for k in ('candidate_id','check','manifest_hash','manifest','schedule','preview_status')} for c in decision['candidates']],
             chosen=(decision.get('answer') or {}).get('candidate_id')),
         releases=[dict(number=r['number'],status=r['status'],manifest_hash=r['manifest_hash'],summary=r['summary'],
             publications=[dict(platform=p['platform'],status=p['status']) for p in r['publications']],
-            expected=r['acks']['expected'],confirmed=sorted(a['person'] for a in r['acks']['confirmed'])) for r in state['releases']],
-        crew=[{k:p.get(k) for k in ('id','call_time','affected','acked_release')} for p in state['crew']])
+            duty_changes=r.get('duty_changes'),expected=r['acks']['expected'],confirmed=sorted(a['person'] for a in r['acks']['confirmed'])) for r in state['releases']],
+        crew=[{k:p.get(k) for k in ('id','call_time','affected','acked_release','since_confirmed')} for p in state['crew']])
 
 
 async def main(*, light_only: bool=False) -> None:
@@ -73,26 +73,28 @@ async def main(*, light_only: bool=False) -> None:
     beats: list[Beat]=[]
     proofs: list[ChatProof]=[]
     clients=[]
+    card_proofs: list[dict[str,Any]]=[]
+    recorded_paths: set[Path]=set()
     try:
         await mm.initialize()
-        clients=[await identity(name,DIRECTORY) for name in ('w6-coordinator','w6-supervisor','w6-first-ad')]
+        clients=[await identity(name,DIRECTORY) for name in ('w8-coordinator','w8-supervisor','w8-first-ad')]
         bootstrap=Stream(clients[0])
         streams.append(bootstrap)
         await bootstrap.start()
         rooms=await clients[0].member_rooms()
-        room=next((r['room_id'] for r in rooms if r['name']=='w6-production'),None)
+        room=next((r['room_id'] for r in rooms if r['name']=='w8-production'),None)
         if not room:
             template=yaml.safe_load((ROOT/'templates/production.yaml').read_text(encoding='utf-8'))
             template['room']['users'] += [p.username for p in mm.users.values()]
-            result=await clients[0].create_room_from_yaml(yaml.safe_dump(template),dict(name='w6-production',bridge='Mattermost',
-                coordinator='w6-coordinator',script_supervisor='w6-supervisor',first_ad='w6-first-ad'))
+            result=await clients[0].create_room_from_yaml(yaml.safe_dump(template),dict(name='w8-production',bridge='Mattermost',
+                coordinator='w8-coordinator',script_supervisor='w8-supervisor',first_ad='w8-first-ad'))
             if result.failed_attachments:
                 raise RuntimeError('Day room attachments failed')
             room=result.room_id
         await clients[0].connect_to_production(room)
         await allow_demo_people(clients[0].identity.agent_id,room,[c.identity.agent_id for c in clients[1:]])
         await close_old_demo_cards(clients[0])
-        await mm.join_channel('w6-production')
+        await mm.join_channel('w8-production')
         for client,role in zip(clients[1:],('script-supervisor','first-ad'),strict=True):
             client.production_room_id=room
             stream=Stream(client)
@@ -105,13 +107,13 @@ async def main(*, light_only: bool=False) -> None:
         database=DIRECTORY/'ledger.sqlite'
         reset_ledger(database)
         settings=Settings(_env_file=None,switch_api_url=clients[0].base_url,
-            take_two_db=database,take_two_identity=DIRECTORY/'w6-coordinator.json',
+            take_two_db=database,take_two_identity=DIRECTORY/'w8-coordinator.json',
             take_two_artifacts=DIRECTORY/'artifacts',take_two_renderer_cli=cli,take_two_render_timeout=240,
-            switch_production_room_id=room,switch_crew_room_ids=room,take_two_coordinator_name='w6-coordinator',
+            switch_production_room_id=room,switch_crew_room_ids=room,take_two_coordinator_name='w8-coordinator',
             take_two_coordinator_sender_id=senders['coordinator'],
             take_two_director_id=senders['director'],take_two_producer_id=senders['producer'],take_two_ad_id=senders['ad-human'],
-            take_two_supervisor_sender_id=senders['w6-supervisor'],take_two_ad_sender_id=senders['w6-first-ad'],
-            take_two_supervisor_agent_name='w6-supervisor',take_two_ad_agent_name='w6-first-ad',
+            take_two_supervisor_sender_id=senders['w8-supervisor'],take_two_ad_sender_id=senders['w8-first-ad'],
+            take_two_supervisor_agent_name='w8-supervisor',take_two_ad_agent_name='w8-first-ad',
             take_two_crew_identities={senders[role]:role for role in ('maya','dev','leela')})
         (DIRECTORY/'settings.json').write_text(settings.model_dump_json(exclude={'switch_registration_key'}),encoding='utf-8',newline='\n')
         runtime=Runtime(settings)
@@ -132,7 +134,9 @@ async def main(*, light_only: bool=False) -> None:
                 require_unicode(current)
                 index=len(beats)+1
                 # Write the actual HTTP JSON, not an invented projection.
-                (fixtures/f'{index:02}-{name}.json').write_text(json.dumps(current,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8',newline='\n')
+                path=fixtures/f'{index:02}-{name}.json'
+                path.write_text(json.dumps(current,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8',newline='\n')
+                recorded_paths.add(path.resolve())
                 beats.append(Beat(number=index,name=name,state=deepcopy(current)))
                 print(f'Beat {index:02}: {name}',flush=True)
                 return current
@@ -153,11 +157,24 @@ async def main(*, light_only: bool=False) -> None:
                 current=await state()
                 r=current['releases'][0] if current['releases'] else None
                 return current if r and r['number']==number and r['status']=='published' else None
+            async def open_card(kind: str, person: str | None=None) -> dict[str,Any] | None:
+                return next((q for q in runtime.loop.workflow.get('cards',{}).values()
+                    if q['kind']==kind and q['status']=='open' and (person is None or q.get('person')==person)),None)
+            async def answer_card(q: dict[str,Any], actor: str, position: int, note: str | None=None) -> None:
+                handle=await mm.answer_personal(q,actor,position,note)
+                card_proofs.append(dict(kind=q['kind'],person=q.get('person'),prompt=q['prompt'],
+                    options=[o['label'] for o in q['options']],actor=actor,position=position,note=note,handle=handle))
+            async def record_proposal() -> None:
+                q=await wait_for(lambda:open_card('proposal'),timeout=60,label='authority proposal card')
+                await answer_card(q,'ad-human',1)
+                async def recorded_proposal() -> bool:
+                    return runtime.loop.workflow['cards'][q['request_id']]['status']=='answered'
+                await wait_for(recorded_proposal,timeout=30,label='authority record')
             async def confirmations(number: int) -> None:
-                current=await state()
-                release=current['releases'][0]
+                release=(await state())['releases'][0]
                 for person in release['acks']['expected']:
-                    await mm.post(person,f'confirm r{number}')
+                    q=await wait_for(lambda:open_card('duty',person),timeout=30,label='duty card')
+                    await answer_card(q,person,1)
                 async def all_confirmed() -> bool:
                     r=(await state())['releases'][0]
                     return set(r['acks']['expected'])=={a['person'] for a in r['acks']['confirmed']}
@@ -181,16 +198,29 @@ async def main(*, light_only: bool=False) -> None:
             if light_only:
                 scenarios=[('losing-light','producer','/change location rooftop light_until 17:20')]
             for number,(name,actor,command) in enumerate(scenarios,2):
-                await mm.post(actor,command)
+                before=(await state())['revisions']['constraints']
+                if name=='late-actor':
+                    q=await wait_for(lambda:open_card('duty','dev'),timeout=30,label='Dev duty card')
+                    await answer_card(q,'dev',2,'Running 40 min late')
+                    await capture('dev-cannot-make-it')
+                    await record_proposal()
+                else:
+                    await mm.post(actor,command)
                 async def recorded() -> bool:
                     current=await state()
-                    return current['revisions']['constraints']==number and current['changes'][0]['status']=='recorded'
+                    return current['revisions']['constraints']==before+1 and current['changes'][0]['status']=='recorded'
                 await wait_for(recorded,timeout=30,label=name+' recorded')
                 current=await capture(name+'-recorded')
                 hold=next(t['text'] for t in current['timeline'] if t['kind']=='hold' and t['ref']==current['changes'][0]['id'])
                 await wait_for(lambda:matching_post(hold),timeout=30,label='HOLD accepted in chat')
                 await capture(name+'-hold')
-                q=await wait_for(lambda:decision(number),timeout=300,label=name+' decision')
+                q=await wait_for(lambda:decision(before+1),timeout=300,label=name+' decision')
+                if name=='rooftop':
+                    await capture('rooftop-before-maya-report')
+                    await mm.post('maya','I have to leave at 6')
+                    await record_proposal()
+                    q=await wait_for(lambda:decision(before+2),timeout=300,label='updated rooftop decision')
+                    await capture('maya-change-confirmed')
                 assert all(c['check']['result']=='pass' for c in q['candidates'])
                 await capture(name+'-decision')
                 await mm.answer(q,1)
@@ -198,10 +228,11 @@ async def main(*, light_only: bool=False) -> None:
                 current=await capture(f'r{number}-release')
                 text=await wait_for(lambda:matching_post(f'TAKE TWO · Release {number} ',True),timeout=30,label='release chat')
                 proofs.append(ChatProof(scenario=name,hold=hold,release=text))
-                await confirmations(number)
-                current=await capture(f'r{number}-confirmed')
+                if name!='rooftop' or light_only:
+                    await confirmations(number)
+                current=await capture(f'r{number}-'+('awaiting-crew' if name=='rooftop' and not light_only else 'confirmed'))
                 assert all(s['validity']=='valid' for s in current['scenes'])
-            assert len(current['changes'])==len(scenarios)
+            assert sum(c['status']=='recorded' for c in current['changes'])==len(scenarios)+(0 if light_only else 1)
             assert [r['number'] for r in current['releases']]==list(range(len(scenarios)+1,0,-1))
             results=[dict(number=b.number,name=b.name,result=normalized(b.state)) for b in beats]
             # Worker statuses at record/hold can race network delivery, so compare
@@ -217,8 +248,19 @@ async def main(*, light_only: bool=False) -> None:
             if compared:
                 assert json.loads(previous.read_text(encoding='utf-8'))==result,'Normalized day differs from previous reset run'
             previous.write_text(json.dumps(result,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8',newline='\n')
+            (DIRECTORY/f'cards{suffix}.json').write_text(json.dumps(card_proofs,ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
             (DIRECTORY/f'chat{suffix}.json').write_text(json.dumps([p.model_dump() for p in proofs],ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
             (DIRECTORY/f'last-run{suffix}.json').write_text(json.dumps(dict(state=current,compared=compared,beats=len(beats)),ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8',newline='\n')
+            # Preserve prior fixture files with obsolete names; never delete them.
+            archive=DIRECTORY/'fixture-archive'/datetime.now().strftime('%Y%m%d%H%M%S%f')
+            for old in fixtures.glob('*.json'):
+                if old.resolve() in recorded_paths:
+                    continue
+                target=archive/old.name
+                if not old.resolve().is_relative_to(FIXTURES.parent.resolve()) or not target.resolve().is_relative_to(DIRECTORY.resolve()):
+                    raise ValueError('Fixture archive must remain inside the workspace')
+                archive.mkdir(parents=True,exist_ok=True)
+                old.replace(target)
             print(json.dumps(dict(release=current['releases'][0]['release_id'],beats=len(beats),normalized_match=compared,expected=current['releases'][0]['acks']['expected'])),flush=True)
     finally:
         if server:

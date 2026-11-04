@@ -4,17 +4,17 @@
 services:
   switch:
     build:
-      context: E:/DevDrive/switch
+      context: ${SWITCH_SOURCE:?Set SWITCH_SOURCE to the pinned checkout}
       dockerfile: deploy/shared_resources/images/Dockerfile.switch
     restart: "no"
   gateway:
     build:
-      context: E:/DevDrive/switch
+      context: ${SWITCH_SOURCE:?Set SWITCH_SOURCE to the pinned checkout}
       dockerfile: deploy/shared_resources/images/Dockerfile.gateway
     restart: "no"
   setup:
     build:
-      context: E:/DevDrive/switch
+      context: ${SWITCH_SOURCE:?Set SWITCH_SOURCE to the pinned checkout}
       dockerfile: deploy/shared_resources/images/Dockerfile.setup
     restart: "no"
   postgres:

@@ -82,6 +82,7 @@ class Change(ChangeCommand):
     status: ChangeStatus
     source: Literal["mattermost", "discord", "control_room"]
     constraints_rev: Positive | None = None
+    resolution: Literal['recorded', 'dismissed'] | None = None
 
 
 class ChangeResponse(WireModel):
@@ -174,6 +175,7 @@ class Release(WireModel):
     preview_url: MediaURL | None = None
     publications: Annotated[list[Publication], Field(max_length=20)]
     acks: Acks
+    duty_changes: dict[NonEmpty, Annotated[list[NonEmpty], Field(max_length=500)]] | None = None
 
 
 class CrewMember(WireModel):
@@ -184,6 +186,7 @@ class CrewMember(WireModel):
     call_time: Timestamp | None = None
     acked_release: Positive | None = None
     affected: bool | None = None
+    since_confirmed: Annotated[list[NonEmpty], Field(max_length=500)] | None = None
 
 
 class TimelineItem(WireModel):

@@ -304,7 +304,8 @@ class Dispatcher:
                 await self._publication(effect, 'sent')
         safe = ('hold', 'release', 'preview', 'document', 'close_question', 'mark_delivered')
         for effect in self.ledger.effects('uncertain'):
-            if effect['kind'] in safe and effect['attempts'] < 2:
+            recoverable_card = effect['kind'] == 'open_question' and not self.ledger.get_meta('presentation_uncertain:' + effect['id'])
+            if (effect['kind'] in safe or recoverable_card) and effect['attempts'] < 2:
                 self.ledger.effect_status(effect['id'], 'pending')
             else:
                 self._notice(f"{effect['kind']} has uncertain delivery after restart; review before retrying.",

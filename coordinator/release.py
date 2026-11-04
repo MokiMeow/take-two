@@ -5,9 +5,10 @@ import json
 from typing import Any
 
 from coordinator.constraints import Manifest
-from coordinator.render_props import callsheet_props, call_times, operational, hhmm, preview_props
+from coordinator.render_props import callsheet_props, call_times, hhmm, preview_props
 from coordinator.schedules import check_schedule, digest, plans, retained_plans, snapshot
 from coordinator.workflow_models import workflow_transaction
+from coordinator.duties import personal_changes
 
 
 class ReleaseTransitions:
@@ -59,17 +60,17 @@ class ReleaseTransitions:
         envelope = dict(manifest=manifest,previous_manifest=previous,metadata=metadata,release=identity,
             approved_candidate_hash=candidate['manifest_hash'],request_id=question['request_id'])
         callsheet_props(envelope)  # Validate the complete immutable artifact input before commit.
-        times, old_times = call_times(manifest), call_times(previous or dict(scenes=[]))
-        expected = [p['id'] for p in metadata['crew'] if times.get(p['id']) != old_times.get(p['id'])]
+        times = call_times(manifest)
+        duty_changes = personal_changes(state,self.workflow,manifest,metadata)
+        expected = [p['id'] for p in metadata['crew'] if duty_changes[p['id']]]
+        envelope['duty_changes'] = duty_changes
         for member in state['crew']:
             member.update(affected=member['id'] in expected,call_time=times.get(member['id']))
-            if member['affected']:
-                member['acked_release']=None
         release = dict(release_id=release_id,number=number,status='approved',created_at=stamp,
             manifest_hash=identity['manifest_hash'],summary=summary,preview_url=candidate.get('preview_url'),
             publications=[dict(room=r,room_name=self.room_names.get(r,r if r.startswith('#') else 'Crew room'),
                 platform=self.destination_platforms.get(r,'discord'),status='pending') for r in self.destinations],
-            acks=dict(expected=expected,confirmed=[],policy='affected_only'))
+            acks=dict(expected=expected,confirmed=[],policy='affected_only'),duty_changes=duty_changes)
         state['releases'].insert(0,release)
         self.workflow['releases'][release_id] = dict(script_rev=self.constraints.script_rev,
             constraints_rev=self.constraints.constraints_rev,candidate=deepcopy(candidate),
@@ -92,6 +93,9 @@ class ReleaseTransitions:
         if kind=='role_message':
             return any(j['job_id']==p.get('job_id') and self._bound(j) and j['status'] in ('queued','running') for j in self.workflow['jobs'])
         if kind=='open_question':
+            card = self.workflow.get('cards', {}).get(p['payload']['request_id'])
+            if card:
+                return card['status']=='open' and self._card_current(card,self._state()) and self._now()<datetime.fromisoformat(card['expires_at'])
             q = self.workflow['question']
             return bool(q and q['status']=='open' and q['request_id']==p['payload']['request_id'] and self._now()<datetime.fromisoformat(q['expires_at']))
         if kind=='preview':
@@ -127,5 +131,7 @@ class ReleaseTransitions:
                                     s.update(validity='valid',hold_reason=None,plan={k:m[k] for k in ('location','start','end','setup_min','wrap_min','people')})
                     else:
                         self._hold(state,[s['id'] for s in state['scenes'] if s['validity']!='valid'],'A newer change arrived during publication',release_id)
+                    if internal and self._bound(internal) and not self.workflow.get('unresolved'):
+                        self._duty_cards(state,r)
                     self._event(state,'release',f'{release_id} published: accepted by Switch for relay; external delivery is unverified.',release_id)
                 self._save(state)

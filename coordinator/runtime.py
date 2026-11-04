@@ -24,7 +24,7 @@ from coordinator.switch_models import ApprovalOutcome, SwitchFrame
 from coordinator.ui_models import ChangeCommand, State
 from coordinator.recovery import Recovery
 from coordinator.rooms import DayRooms
-from coordinator.presentation import role_label, person_label
+from coordinator.presentation import role_label
 from coordinator.render_props import hhmm
 from coordinator.switch_text_answer import parse_text_answer
 
@@ -148,6 +148,8 @@ class Runtime(Recovery, DayRooms):
         if not set(settings.take_two_crew_identities.values()) <= {p.id for p in crew.crew}:
             raise ValueError('Configured crew identities must map to reviewed crew IDs')
         self.crew_ids.update(settings.take_two_crew_identities)
+        self.loop.crew_ids = self.crew_ids
+        self.loop.production_date = script.shoot_day
         people = {p.id: p for p in [*crew.crew, *crew.humans]}
         self.loop.identity_names = {p.switch_identity: p.name for p in people.values()}
         self.loop.identity_roles = {p.switch_identity: p.role for p in people.values()}
@@ -377,22 +379,8 @@ class Runtime(Recovery, DayRooms):
                 or parse_text_answer(message.body) is not None
                 or re.match(r'^\s*📄\s*(?:created|updated|deleted) room document\b', message.body)):
             return
-        key = 'pending-report:' + message.message_id
-        if self.ledger.get_meta(key):
-            return
-        state = self.ledger.snapshot_state()
-        with self.ledger.transaction():
-            state['changes'].insert(0, dict(id=key, at=now_iso(), reporter=message.sender,
-                reporter_name=self.loop.identity_names[message.sender], entity='scene',
-                target='unconfirmed', field='report', value=message.body[:512], status='pending_confirmation', source=source))
-            state['changes'] = state['changes'][:200]
-            self.ledger.save_state(state)
-            label = person_label(message.sender, self.loop.identity_names, self.loop.identity_roles)
-            self.ledger.timeline('change', f'{label} reported a change; structured confirmation is required.', key)
-            self.ledger.set_meta(key, True)
-            self.ledger.enqueue('message', dict(room_id=self.settings.switch_production_room_id or event.room_id,
-                body='Report recorded as pending. An authorized person must confirm it with /change <entity> <target> <field> <value>.'),
-                key, self.loop.constraints.constraints_rev)
+        await self.loop.record_report(sender=message.sender, person=self.crew_ids.get(message.sender),
+            text=message.body, key='pending-report:' + message.message_id, source=source, room_id=event.room_id)
 
     async def service(self) -> None:
         last_outcomes = asyncio.get_running_loop().time()

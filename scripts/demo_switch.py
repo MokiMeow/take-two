@@ -133,6 +133,27 @@ class Mattermost:
         suffix=f', "{note}"' if note else ''
         await self.post('director',f'{handle} q1={position}{suffix}')
 
+    async def answer_personal(self, card: dict[str,Any], actor: str, position: int, note: str | None=None) -> str:
+        """Use the bridge's published native handle, exactly as a Mattermost person does."""
+        import json
+        earliest=int(datetime.fromisoformat(card['opened_at']).timestamp()*1000)-1000
+        async def find() -> str | None:
+            response=Posts.model_validate((await self.request('GET',f'/channels/{self.channel}/posts?per_page=100')).json())
+            for post in sorted(response.posts.values(),key=lambda p:p.get('create_at',0),reverse=True):
+                encoded=json.dumps(post,ensure_ascii=False)
+                if post.get('create_at',0)<earliest or not post.get('props',{}).get('switch_publication'):
+                    continue
+                if card['request_id'] not in encoded and card['title'] not in encoded:
+                    continue
+                match=re.search(r'\bA[1-9][0-9]*\b',encoded)
+                if match:
+                    return match[0]
+            return None
+        handle=await wait_for(find,timeout=45,label='personal native Mattermost card')
+        suffix=', '+json.dumps(note,ensure_ascii=False) if note else ''
+        await self.post(actor,f'{handle} q1={position}{suffix}')
+        return handle
+
     async def close(self) -> None:
         await self.http.aclose()
 
@@ -239,8 +260,8 @@ async def allow_demo_people(agent_id: str, room_id: str, workers: list[str]) -> 
 
 async def close_old_demo_cards(client: SwitchClient) -> None:
     questions=client._questions()
-    if len(questions)>50:
-        raise ValueError('Rehearsal question history exceeds 50; archive it before another run')
+    if len(questions)>400:
+        raise ValueError('Rehearsal question history exceeds 400; archive it before another run')
     for key in questions:
         session,request=key.split(':',1)
         await client.close_question(request,session_id=session)

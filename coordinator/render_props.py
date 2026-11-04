@@ -96,7 +96,12 @@ def release_text(envelope: dict[str, Any]) -> str:
         if p['changed']:
             prior=old_times.get(member['id'])
             changed_calls.append(f"{p['name']} {hhmm(prior) if prior else 'none'} → {hhmm(p['call_time']) if p['call_time'] else 'held'}")
-    lines.append('Re-confirm changed calls: '+('; '.join(changed_calls) or 'none; existing confirmations carry forward')+'.')
+    lines.append('Changed calls: '+('; '.join(changed_calls) or 'none')+'.')
+    if 'duty_changes' in envelope:
+        names = {p['id']:p['name'] for p in envelope['metadata']['crew']}
+        for person, changes in envelope['duty_changes'].items():
+            if changes:
+                lines.append(f"{names[person]} · re-confirm duties: {'; '.join(changes)}.")
     for scene in envelope['manifest']['scenes']:
         if 'shots' in scene:
             number = next(s['number'] for s in envelope['metadata']['scenes'] if s['id']==scene['scene_id'])

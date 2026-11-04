@@ -289,8 +289,6 @@ class SwitchClient:
         return path if request_id is None else path + "/" + quote(request_id, safe="")
 
     async def open_question(self, payload: QuestionPayload) -> ApprovalOutcome:
-        if payload.room_id != self._require_production():
-            raise SwitchError("questions must be opened in production")
         questions = self._questions()
         exact = payload.model_dump(mode="json")
         key = self.identity.session_id + ":" + payload.request_id

@@ -102,7 +102,7 @@ async def test_overrun_ripples_without_touching_distant_scene_and_cannot_shrink(
     assert q
     assert await rt.loop.handle_outcome(dict(session_id=q['session_id'],request_id=q['request_id'],answered_by='director',candidate_id='ripple'))
     release=rt.loop.workflow['releases']['r2']['envelope']
-    assert rt.ledger.snapshot_state()['releases'][0]['acks']['expected']==['maya']
+    assert rt.ledger.snapshot_state()['releases'][0]['acks']['expected']==['maya','dev','leela']
     text=release_text(release)
     assert 'moved' in text and '15:25–15:35 → 15:50–16:00' in text
     assert 'Maya 15:25 → 15:50' in text

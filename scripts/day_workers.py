@@ -27,7 +27,7 @@ def candidates(job: dict[str, Any]) -> list[dict[str, Any]]:
         rows=[dict(deepcopy(m),constraints_rev=rev) for m in job['current_schedule'] if m['scene_id'] in job['scene_ids']]
         by_id={m['scene_id']:m for m in rows}
         change=job['change']
-        if change['field'] in ('permission','light_until'):
+        if change['field'] in ('permission','light_until','hard_stop'):
             by_id['s3'].update(location='stairwell',start='2026-11-06T16:45:00+05:30',
                 end='2026-11-06T18:00:00+05:30',requires_light=False)
             label='Stairwell confession, keep early work'
@@ -69,15 +69,22 @@ async def worker(stream: Stream, role: str, room_id: str) -> None:
         if role=='script-supervisor':
             reply.update(must_keep=['Keep all reviewed dialogue intelligible; the confession remains confidential in the story.'],
                 summary='Use confirmed audio; do not drop sound or required cast.')
+        elif job.get('task')=='extract_change':
+            if 'leave' in job['message'].lower():
+                reply.update(entity='person',target=job['person_id'],field='hard_stop',value='18:00',confidence=0.99)
+            elif 'late' in job['message'].lower():
+                reply.update(entity='person',target=job['person_id'],field='late_by',value='40',confidence=0.99)
+            else:
+                reply.update(entity='person',target=job['person_id'],field='late_by',value='0',confidence=0.1)
         else:
             reply['candidates']=candidates(job)
-        await stream.client.send_message(room_id,'@w6-coordinator\n```json\n'+json.dumps(reply)+'\n```')
+        await stream.client.send_message(room_id,'@w8-coordinator\n```json\n'+json.dumps(reply)+'\n```')
     raise RuntimeError('Day worker exceeded 200 frames')
 
 
 async def identities(bootstrap: Stream, mm: Mattermost, workers: list[Stream], room: str) -> dict[str,str]:
     since=now_iso()
-    receipt=await bootstrap.client.send_message(room,'W6 rehearsal identity')
+    receipt=await bootstrap.client.send_message(room,'W8 rehearsal identity')
     async def own() -> str | None:
         history=RoomContext.model_validate(await bootstrap.client.read_context(room,since))
         if history.truncated:
@@ -86,10 +93,10 @@ async def identities(bootstrap: Stream, mm: Mattermost, workers: list[Stream], r
     found={'coordinator':await wait_for(own,timeout=30,label='coordinator identity')}
     names={person.username:role for role,person in mm.users.items()}
     for role,person in mm.users.items():
-        await mm.post(role,'W6 rehearsal identity: '+person.username)
-    for name,stream in zip(('w6-supervisor','w6-first-ad'),workers,strict=True):
+        await mm.post(role,'W8 rehearsal identity: '+person.username)
+    for name,stream in zip(('w8-supervisor','w8-first-ad'),workers,strict=True):
         names[name]=name
-        await stream.client.send_message(room,'W6 rehearsal identity: '+name)
+        await stream.client.send_message(room,'W8 rehearsal identity: '+name)
     for _ in range(100):
         frame=await asyncio.wait_for(bootstrap.queue.get(),30)
         payload=frame.data.get('payload',{})

@@ -242,3 +242,4 @@
   .replay button { width: 22px; }
   .btn { padding: 0 10px; }
 }
+.replay-pos { min-width: 150px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); color: var(--ink); text-align: center; }

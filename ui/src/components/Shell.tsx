@@ -30,9 +30,17 @@ export function TopBar({ state, source, setFixture, onHistory, onReport }: {
         {source.kind === "fixture" ? (
           <div className="replay" role="group" aria-label="Demo replay">
             <span className="replay-label">Replay</span>
-            {fixtures.map((f, i) => (
-              <button key={f.name} aria-pressed={i === source.index} title={f.name} onClick={() => setFixture(i)}>{i + 1}</button>
-            ))}
+            {fixtures.length <= 9 ? (
+              fixtures.map((f, i) => (
+                <button key={f.name} aria-pressed={i === source.index} title={f.name} onClick={() => setFixture(i)}>{i + 1}</button>
+              ))
+            ) : (
+              <>
+                <button aria-label="Previous moment" onClick={() => setFixture(Math.max(0, source.index - 1))}>‹</button>
+                <span className="replay-pos" title={fixtures[source.index]?.name}>{source.index + 1}/{fixtures.length} · {fixtures[source.index]?.name}</span>
+                <button aria-label="Next moment" onClick={() => setFixture(Math.min(fixtures.length - 1, source.index + 1))}>›</button>
+              </>
+            )}
           </div>
         ) : (
           <span className="conn" data-kind={source.kind}>

@@ -3,17 +3,20 @@ import type { ChangeCommand, State } from "./types";
 
 // Fixture snapshots, one per demo moment. Used only when the coordinator is not reachable,
 // and always labelled "Fixture replay" in the UI so it can't be mistaken for live data.
-const fixtureModules = import.meta.glob<State>("../../fixtures/ui-state/*.json", {
-  eager: true,
-  import: "default",
-});
+// `?fixtures` replays the rooftop story; `?fixtures=day` replays the recorded multi-problem shoot day.
+const storyModules = import.meta.glob<State>("../../fixtures/ui-state/*.json", { eager: true, import: "default" });
+const dayModules = import.meta.glob<State>("../../fixtures/ui-state/day/*.json", { eager: true, import: "default" });
 
-export const fixtures: { name: string; state: State }[] = Object.entries(fixtureModules)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([path, state]) => ({
-    name: path.split("/").pop()!.replace(/\.json$/, "").replace(/^\d+-/, "").replace(/-/g, " "),
-    state,
-  }));
+const toList = (mods: Record<string, State>) =>
+  Object.entries(mods)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([path, state]) => ({
+      name: path.split("/").pop()!.replace(/\.json$/, "").replace(/^\d+-/, "").replace(/-/g, " "),
+      state,
+    }));
+
+const wantDay = new URLSearchParams(location.search).get("fixtures") === "day";
+export const fixtures: { name: string; state: State }[] = toList(wantDay && Object.keys(dayModules).length ? dayModules : storyModules);
 
 export type Source =
   | { kind: "connecting" }

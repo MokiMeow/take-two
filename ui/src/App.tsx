@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MotionConfig } from "motion/react";
-import { useProductionState } from "./data";
+import { fixtures, useProductionState } from "./data";
 import type { ScenePlan, State } from "./types";
 import { Schedule } from "./components/Schedule";
 import { CrewCard, DecisionCard, ReleaseCard } from "./components/Side";
@@ -37,12 +37,15 @@ export default function App() {
   useEffect(() => {
     if (source.kind !== "fixture") return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return;
       const n = Number(e.key);
-      if (n >= 1 && n <= 9 && !(e.target instanceof HTMLInputElement)) setFixture(n - 1);
+      if (n >= 1 && n <= 9 && fixtures.length <= 9) setFixture(n - 1);
+      if (e.key === "ArrowRight") setFixture(Math.min(fixtures.length - 1, (source.kind === "fixture" ? source.index : 0) + 1));
+      if (e.key === "ArrowLeft") setFixture(Math.max(0, (source.kind === "fixture" ? source.index : 0) - 1));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [source.kind, setFixture]);
+  }, [source, setFixture]);
 
   if (!state) {
     return <div className="boot"><span className="boot-dot" /> Connecting to the coordinator</div>;

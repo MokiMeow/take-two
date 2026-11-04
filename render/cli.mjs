@@ -35,6 +35,8 @@ function srcHash() {
     }
   };
   walk(join(here, "src"));
+  // The preview draws the Control Room's set models, so their code is part of the bundle.
+  walk(join(here, "..", "ui", "src", "sets"));
   return h.digest("hex").slice(0, 16);
 }
 

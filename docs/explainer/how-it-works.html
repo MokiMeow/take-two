@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Take Two works</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/geist-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/geist-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  :root {
+    --page: #16191c; --sheet: #1d2226; --raised: #252b30; --raised-2: #2e353b;
+    --rule: #ffffff14; --ink: #eff0e9; --secondary: #a9b0b3; --faint: #7d888d;
+    --go: #8fd19e; --hold: #f1b84c; --stop: #ff7049; --blue: #bfcaf2; --sage: #c1ccae;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 Geist, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .page { width: 1600px; padding: 56px 64px 48px; }
+  h1 { margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.035em; }
+  .sub { margin: 8px 0 0; font-size: 17px; color: var(--secondary); max-width: 80ch; }
+  .mono { font-family: "Geist Mono", ui-monospace, Consolas, monospace; }
+
+  /* Top: who is connected through Switch. */
+  .wire { display: grid; grid-template-columns: 1fr 120px 1.1fr 120px 1fr; align-items: stretch; margin-top: 40px; }
+  .col { display: grid; gap: 10px; align-content: center; }
+  .node { background: var(--sheet); border-radius: 14px; padding: 14px 16px; box-shadow: 0 10px 30px #0000002e; }
+  .node b { display: block; font-size: 15px; font-weight: 600; }
+  .node span { font-size: 12.5px; color: var(--secondary); }
+  .tag { display: inline-block; margin-bottom: 6px; font: 600 10.5px "Geist Mono", ui-monospace, Consolas, monospace; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+  .switch { border-radius: 18px; padding: 22px; background: linear-gradient(180deg, #232a30, #1d2226); box-shadow: inset 0 0 0 1.5px #ff704966, 0 20px 50px #0000004d; display: grid; gap: 12px; align-content: center; }
+  .switch h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+  .switch h2 i { font-style: normal; color: var(--stop); }
+  .switch p { margin: 0; color: var(--secondary); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 4px 9px; border-radius: 999px; background: var(--raised); font-size: 12px; color: var(--ink); }
+  .link { position: relative; display: grid; place-items: center; }
+  .link::before { content: ""; position: absolute; left: 8px; right: 8px; top: 50%; border-top: 1.5px dashed #eff0e955; }
+  .link em { position: relative; font-style: normal; background: var(--page); padding: 3px 8px; font: 11px "Geist Mono", ui-monospace, Consolas, monospace; color: var(--secondary); text-align: center; }
+
+  /* Middle: the loop. */
+  .loop-title { margin: 44px 0 14px; display: flex; align-items: baseline; gap: 14px; }
+  .loop-title h3 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+  .loop-title span { color: var(--faint); font-size: 13px; }
+  .loop { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+  .step { background: var(--sheet); border-radius: 14px; padding: 14px 14px 16px; position: relative; }
+  .step .n { font: 600 22px/1 Geist, system-ui, sans-serif; letter-spacing: -0.04em; }
+  .step .who { margin-top: 8px; font: 600 10.5px "Geist Mono", ui-monospace, Consolas, monospace; letter-spacing: 0.05em; text-transform: uppercase; }
+  .step b { display: block; margin-top: 6px; font-size: 15px; }
+  .step p { margin: 6px 0 0; font-size: 12.5px; color: var(--secondary); }
+  .step .ex { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--raised); font: 11.5px/1.45 "Geist Mono", ui-monospace, Consolas, monospace; color: var(--ink); }
+  .bar { height: 4px; border-radius: 2px; margin-bottom: 12px; }
+  .human .who { color: var(--hold); } .human .bar { background: var(--hold); }
+  .code .who { color: var(--sage); } .code .bar { background: var(--sage); }
+  .ai .who { color: var(--blue); } .ai .bar { background: var(--blue); }
+
+  /* Bottom: the rules that keep it safe. */
+  .rules { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 26px; }
+  .rule { border-radius: 14px; padding: 14px 16px; background: var(--raised); }
+  .rule b { font-size: 14px; }
+  .rule p { margin: 5px 0 0; font-size: 12.5px; color: var(--secondary); }
+  .legend { display: flex; gap: 18px; margin-top: 22px; font-size: 12px; color: var(--faint); }
+  .legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>How Take Two works</h1>
+  <p class="sub">A shoot day changes all the time. Take Two sits in Switch between the people and two AI agents, and keeps everyone on one current, checked plan.</p>
+
+  <div class="wire">
+    <div class="col">
+      <div class="node"><span class="tag">Production room · Mattermost</span><b>Producer, AD, director</b><span>Report changes with <span class="mono">/change</span>. The director answers the decision card.</span></div>
+      <div class="node"><span class="tag">Crew rooms · Discord</span><b>Maya, Dev, Leela</b><span>Get holds and releases, reply <span class="mono">confirm r2</span>, say “I have to leave at 6”.</span></div>
+    </div>
+    <div class="link"><em>messages<br>+ who sent them</em></div>
+    <div class="switch">
+      <h2>Switch <i>●</i> the hub</h2>
+      <p>Connects the chat apps and the agents, and knows which account sent every message.</p>
+      <div class="chips"><span class="chip">Mattermost + Discord bridge</span><span class="chip">native question cards</span><span class="chip">room documents</span><span class="chip">media uploads</span><span class="chip">agent sessions</span></div>
+      <div class="node" style="background:var(--raised)"><span class="tag">Coordinator · Take Two</span><b>Records, holds, asks, checks, releases</b><span>Keeps a ledger of every change and version. Its rules decide who may do what.</span></div>
+    </div>
+    <div class="link"><em>jobs with<br>a version stamp</em></div>
+    <div class="col">
+      <div class="node"><span class="tag">Agent · Claude Code</span><b>Script supervisor</b><span>Says what the story must keep (“the confession stays private”).</span></div>
+      <div class="node"><span class="tag">Agent · Codex</span><b>First AD</b><span>Drafts up to three concrete plans: place, time, cast, shots, kit.</span></div>
+    </div>
+  </div>
+
+  <div class="loop-title"><h3>What happens when something changes</h3><span>The rooftop is refused, the story we use in the demo</span></div>
+  <div class="loop">
+    <div class="step human"><div class="bar"></div><div class="n">01</div><div class="who">Producer</div><b>Record</b><p>Only someone allowed to change permissions can. Facts move to version 2.</p><div class="ex">/change location rooftop permission refused</div></div>
+    <div class="step code"><div class="bar"></div><div class="n">02</div><div class="who">Coordinator</div><b>Hold</b><p>Every scene that uses the rooftop is held at once; the rest stay valid.</p><div class="ex">HOLD · Scene 3. Do not go to the rooftop.</div></div>
+    <div class="step ai"><div class="bar"></div><div class="n">03</div><div class="who">Agents</div><b>Propose</b><p>Both agents get the script and the version-2 facts, and reply in a fixed format.</p><div class="ex">A stairwell · B park · C courtyard</div></div>
+    <div class="step code"><div class="bar"></div><div class="n">04</div><div class="who">Checker (code)</div><b>Check</b><p>Permissions, windows, daylight, hard stops, cast, kit, travel. Failures never reach the director.</p><div class="ex">C fails: courtyard closes at 17:00</div></div>
+    <div class="step human"><div class="bar"></div><div class="n">05</div><div class="who">Director</div><b>Decide</b><p>A Switch question card with the passing plans and a short set-model clip of each. Only the director’s answer counts.</p><div class="ex">A · keep the confession private</div></div>
+    <div class="step code"><div class="bar"></div><div class="n">06</div><div class="who">Coordinator</div><b>Release</b><p>Release 2 on blue pages with a call sheet, fingerprinted so it cannot change silently.</p><div class="ex">Release 2 → #crew, #day-1</div></div>
+    <div class="step human"><div class="bar"></div><div class="n">07</div><div class="who">Crew</div><b>Confirm</b><p>Affected people confirm. A reply to an old release is caught and corrected.</p><div class="ex">“@Dev that was release 1…”</div></div>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><b>AI suggests, code checks, a person decides</b><p>No plan reaches the crew without passing the checker and the director’s answer.</p></div>
+    <div class="rule"><b>Everything has a version</b><p>Facts, questions and releases are stamped. A question asked on old facts closes as outdated.</p></div>
+    <div class="rule"><b>Identity comes from Switch</b><p>Each message carries its sender’s account; the coordinator’s authority table decides what they may do.</p></div>
+    <div class="rule"><b>Nothing is lost</b><p>Every step is in the ledger, so a restart picks up exactly where it was.</p></div>
+  </div>
+  <div class="legend"><span><i style="background:var(--hold)"></i>a person</span><span><i style="background:var(--sage)"></i>Take Two’s code</span><span><i style="background:var(--blue)"></i>an AI agent</span></div>
+</div>
+</body>
+</html>

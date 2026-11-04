@@ -13,6 +13,8 @@ def prepare() -> Path:
         shutil.copytree(ROOT/'render'/directory,target/directory,dirs_exist_ok=True)
     for filename in ('cli.mjs','package.json','package-lock.json','tsconfig.json'):
         shutil.copy2(ROOT/'render'/filename,target/filename)
+    # Previews draw the Control Room's set models (render/src/Preview.tsx imports ../../ui/src/sets).
+    shutil.copytree(ROOT/'ui/src/sets',target.parent/'ui/src/sets',dirs_exist_ok=True)
     if not (target/'node_modules/@remotion/renderer/package.json').exists():
         npm=shutil.which('npm.cmd') or shutil.which('npm')
         if not npm:

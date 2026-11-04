@@ -35,6 +35,7 @@ class DayRooms:
         if self.ledger.get_meta('day_room_status')=='attachment_failed':
             raise ValueError('Day room attachments need human reconciliation before publication')
         if room_id and self.ledger.get_meta('day_room_status')=='ready':
+            self.loop.room_names[room_id] = '#day-1'
             if room_id not in self.loop.destinations:
                 self.loop.destinations.append(room_id)
             if self.dispatcher and room_id not in self.dispatcher.crew_room_ids:
@@ -82,6 +83,7 @@ class DayRooms:
             await self.client.connect_to_production(self.settings.switch_production_room_id)
         if room_id not in self.loop.destinations:
             self.loop.destinations.append(room_id)
+        self.loop.room_names[room_id] = '#day-1'
         if self.dispatcher and room_id not in self.dispatcher.crew_room_ids:
             self.dispatcher.crew_room_ids.append(room_id)
         with self.ledger.transaction():

@@ -1,0 +1,153 @@
+{
+  "source": "W4 ledger backup 20261104T053111001173Z.sqlite; exact persisted report values",
+  "messages": [
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “script-r1”."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “constraints-r1”."
+    },
+    {
+      "sender": "director",
+      "body": "A12 q1=1"
+    },
+    {
+      "sender": "maya",
+      "body": "Sorry, I have to leave at 6."
+    },
+    {
+      "sender": "director",
+      "body": "A14 q1=2, \"keep the confession private\""
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "No Discord bridge yet. Day 1 room is pending; releases use configured destinations."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Report recorded as pending. An authorized person must confirm it with /change <entity> <target> <field> <value>."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Report recorded as pending. An authorized person must confirm it with /change <entity> <target> <field> <value>."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “constraints-r1”."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@script-supervisor {\"addressed_to\": \"00c04a20-22f2-4070-a7c9-94d31260f90f\", \"attempt\": 0, \"constraints\": {\"capabilities\": {\"gimbal\": \"confirmed\", \"second_camera\": \"unknown\", \"sound_recorder\": \"confirmed\"}, \"commitments\": [], \"constraints_rev\": 1, \"locations\": [{\"id\": \"rooftop\", \"light_until\": \"2026-11-06T18:20:00+05:30\", \"permission\": \"confirmed\", \"permission_authority\": \"producer\", \"permission_confirmed_by\": \"producer\", \"windows\": [{\"end\": \"2026-11-06T20:00:00+05:30\", \"start\": \"2026-11-06T14:00:00+05:30\"}]"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@first-ad {\"addressed_to\": \"00c04a20-22f2-4070-a7c9-94d31260f90f\", \"attempt\": 0, \"constraints\": {\"capabilities\": {\"gimbal\": \"confirmed\", \"second_camera\": \"unknown\", \"sound_recorder\": \"confirmed\"}, \"commitments\": [], \"constraints_rev\": 1, \"locations\": [{\"id\": \"rooftop\", \"light_until\": \"2026-11-06T18:20:00+05:30\", \"permission\": \"confirmed\", \"permission_authority\": \"producer\", \"permission_confirmed_by\": \"producer\", \"windows\": [{\"end\": \"2026-11-06T20:00:00+05:30\", \"start\": \"2026-11-06T14:00:00+05:30\"}]}, {\"id\":"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "A · Initial three-scene schedule · checked pass · rooftop 16:45–18:15; people: maya, dev, leela; shots: wide, two-shot, close-up. Reviewed script and locations. Hash sha256:db8d2b91980dda328736f6b5b25d398801e20c0137f94f9d5cb1737c278beaf1\nComplete schedule: Scene 1: stairwell 15:00–15:15; setup 15m, wrap 0m; people dev, leela; shots wide, two-shot, close-up; kit sound_recorder; Scene 2: courtyard 15:25–15:35; setup 0m, wrap 0m; people maya, dev, leela; shots wide, two-shot, close-up; kit sound_recorder; Scen"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Report recorded as pending. An authorized person must confirm it with /change <entity> <target> <field> <value>."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Release r1"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "TAKE TWO · Release 1 (white pages) · The Last Light, Day 1\nWhat changed: Initial complete three-scene schedule approved.\nSc 1* · The missed call · INT. STAIRWELL · 15:00–15:15\nSc 2* · A promise · EXT. COURTYARD · 15:25–15:35\nSc 3* · The confession · EXT. ROOFTOP · 16:45–18:15\nCall times: Maya 15:25 · Dev 14:45 · Leela 14:45   (* = changed)\nSc 1 coverage: wide, two-shot, close-up; kit: sound_recorder; setup 15m; wrap 0m.\nSc 2 coverage: wide, two-shot, close-up; kit: sound_recorder; setup 0m; wrap 0m.\nSc 3 co"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "HOLD · Scene 3 (The confession). Rooftop permission refused. Do not go to the rooftop.\nScenes 1 and 2 are unchanged. An update is coming."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "This question is outdated, new options coming."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “constraints-r2”."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@script-supervisor {\"addressed_to\": \"00c04a20-22f2-4070-a7c9-94d31260f90f\", \"attempt\": 0, \"change\": {\"entity\": \"location\", \"field\": \"permission\", \"reporter\": \"@switch-mattermost-d1bfb7c1-b0c2-43eb-8a43-0a67470a6f57-w4-producer:localhost\", \"target\": \"rooftop\", \"value\": \"refused\"}, \"constraints\": {\"capabilities\": {\"gimbal\": \"confirmed\", \"second_camera\": \"unknown\", \"sound_recorder\": \"confirmed\"}, \"commitments\": [], \"constraints_rev\": 2, \"locations\": [{\"id\": \"rooftop\", \"light_until\": \"2026-11-06T18:20:00+05:30\""
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@first-ad {\"addressed_to\": \"00c04a20-22f2-4070-a7c9-94d31260f90f\", \"attempt\": 0, \"change\": {\"entity\": \"location\", \"field\": \"permission\", \"reporter\": \"@switch-mattermost-d1bfb7c1-b0c2-43eb-8a43-0a67470a6f57-w4-producer:localhost\", \"target\": \"rooftop\", \"value\": \"refused\"}, \"constraints\": {\"capabilities\": {\"gimbal\": \"confirmed\", \"second_camera\": \"unknown\", \"sound_recorder\": \"confirmed\"}, \"commitments\": [], \"constraints_rev\": 2, \"locations\": [{\"id\": \"rooftop\", \"light_until\": \"2026-11-06T18:20:00+05:30\", \"permis"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "A · Stairwell, full coverage · checked pass · stairwell 16:00–17:15; people: maya, dev, leela; shots: wide, two-shot, close-up. Loses the sunset silhouette; keeps the confession private. Hash sha256:c103a375e6ff8f5cf265439262198b11c00e906742ed4e51a5851ccbc863e7b0"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "B · Park bench, sunset · checked pass · park 16:45–18:15; people: maya, dev, leela; shots: wide, two-shot, close-up. Keeps sunset; passers-by make it less visually intimate, still confidential in the story. Hash sha256:c1e5f8e81aecd078fe0b1b7126e1db88d4936f9ee6bffe8f87a45e41e84793d5"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "HOLD · Scene 3 (The confession). Maya hard_stop 18:00.\nScenes 1 and 2 are unchanged. An update is coming."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Report recorded as pending. An authorized person must confirm it with /change <entity> <target> <field> <value>."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "This question is outdated, new options coming."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “constraints-r3”."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@script-supervisor {\"addressed_to\": \"00c04a20-22f2-4070-a7c9-94d31260f90f\", \"attempt\": 0, \"change\": {\"entity\": \"person\", \"field\": \"hard_stop\", \"reporter\": \"@switch-mattermost-d1bfb7c1-b0c2-43eb-8a43-0a67470a6f57-w4-ad-human:localhost\", \"target\": \"maya\", \"value\": \"18:00\"}, \"constraints\": {\"capabilities\": {\"gimbal\": \"confirmed\", \"second_camera\": \"unknown\", \"sound_recorder\": \"confirmed\"}, \"commitments\": [], \"constraints_rev\": 3, \"locations\": [{\"id\": \"rooftop\", \"light_until\": \"2026-11-06T18:20:00+05:30\", \"permi"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@first-ad {\"addressed_to\": \"00c04a20-22f2-4070-a7c9-94d31260f90f\", \"attempt\": 0, \"change\": {\"entity\": \"person\", \"field\": \"hard_stop\", \"reporter\": \"@switch-mattermost-d1bfb7c1-b0c2-43eb-8a43-0a67470a6f57-w4-ad-human:localhost\", \"target\": \"maya\", \"value\": \"18:00\"}, \"constraints\": {\"capabilities\": {\"gimbal\": \"confirmed\", \"second_camera\": \"unknown\", \"sound_recorder\": \"confirmed\"}, \"commitments\": [], \"constraints_rev\": 3, \"locations\": [{\"id\": \"rooftop\", \"light_until\": \"2026-11-06T18:20:00+05:30\", \"permission\": \""
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "A · Stairwell, full coverage · checked pass · stairwell 16:00–17:15; people: maya, dev, leela; shots: wide, two-shot, close-up. Loses the sunset silhouette; keeps the confession private. Hash sha256:056891c1f0425a937baecaf8083a12d914a2671b566b2e37a3b0e1e9ea12cded"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "B · Stairwell, reduced coverage · checked pass · stairwell 16:30–17:15; people: maya, dev, leela; shots: two-shot, close-up. Keeps the confession private; loses one wide angle and gains setup buffer. Hash sha256:b18d05acd4a579de2aa50f23a211b82e523b59c31315361263748cc6c9456a7f"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Report recorded as pending. An authorized person must confirm it with /change <entity> <target> <field> <value>."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Release r2"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "Release r2"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "TAKE TWO · Release 2 (blue pages) · The Last Light, Day 1\nWhat changed: Scene 3 moves to the stairwell, 16:30–17:15, reduced coverage.\nSc 1 · The missed call · INT. STAIRWELL · 15:00–15:15\nSc 2 · A promise · EXT. COURTYARD · 15:25–15:35\nSc 3* · The confession · INT. STAIRWELL · 16:30–17:15\nCall times: Maya 15:25 · Dev 14:45 · Leela 14:45   (* = changed)\nSc 1 coverage: wide, two-shot, close-up; kit: sound_recorder; setup 15m; wrap 0m.\nSc 2 coverage: wide, two-shot, close-up; kit: sound_recorder; setup 0m; wr"
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "@Dev that was release 1. The current plan is release 2 (Scene 3 → stairwell, 16:30). Please reply \"confirm r2\"."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “script-r1”."
+    },
+    {
+      "sender": "@switch-agent-self:localhost",
+      "body": "📄 updated room document “constraints-r3”."
+    }
+  ]
+}

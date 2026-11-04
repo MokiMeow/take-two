@@ -38,6 +38,7 @@ export interface Change {
   status: "recorded" | "pending_confirmation" | "rejected";
   source: "mattermost" | "discord" | "control_room";
   constraints_rev?: number;
+  reporter_name?: string;
 }
 
 export interface Job {
@@ -81,7 +82,8 @@ export interface Decision {
   opened_at: string;
   expires_at: string;
   candidates: Candidate[];
-  answer?: { candidate_id: string; note?: string; answered_by: string; at: string };
+  answer?: { candidate_id: string; note?: string; answered_by: string; answered_by_name?: string; at: string };
+  authority_name?: string;
   // Script supervisor's story requirements, shown as prose for the director (not machine-checked).
   must_keep?: string[];
   requirements_note?: string;
@@ -96,7 +98,7 @@ export interface Release {
   summary: string;
   call_sheet_url?: string;
   preview_url?: string;
-  publications: { room: string; platform: "discord" | "mattermost"; status: PublicationStatus }[];
+  publications: { room: string; room_name?: string; platform: "discord" | "mattermost"; status: PublicationStatus }[];
   acks: {
     expected: string[];
     confirmed: { person: string; at: string }[];
@@ -111,6 +113,7 @@ export interface CrewMember {
   call_time?: string;
   acked_release?: number;
   affected?: boolean;
+  role_label?: string;
 }
 
 export type TimelineKind =

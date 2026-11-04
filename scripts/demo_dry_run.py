@@ -12,11 +12,14 @@ from coordinator.config import Settings
 from coordinator.runtime import Runtime
 from coordinator.ui_models import State
 from coordinator.worker_text import extract_reply
+from coordinator.switch_models import RoomContext
+from coordinator.ledger import now_iso
 from scripts.demo_switch import DIRECTORY, Mattermost, Stream, identity, provision, wait_for, allow_demo_people, close_old_demo_cards
 from scripts.prepare_renderer import prepare
 from scripts.reset_demo import reset_ledger
 from scripts.seed_initial_plan import post_plan
 from dotenv import dotenv_values
+from coordinator.unicode_text import require_unicode
 
 
 def scene(scene_id: str, location: str, start: str, end: str, rev: int, *, setup: int=15,
@@ -79,6 +82,14 @@ async def worker(stream: Stream, role: str, room_id: str) -> None:
 
 async def identities(bootstrap: Stream, mm: Mattermost, workers: list[Stream], room_id: str) -> dict[str,str]:
     names={person.username:role for role,person in mm.users.items()}
+    since=now_iso()
+    receipt=await bootstrap.client.send_message(room_id,'W5 registered rehearsal identity: w4-coordinator')
+    async def own_sender() -> str | None:
+        context=RoomContext.model_validate(await bootstrap.client.read_context(room_id,since))
+        if context.truncated:
+            raise ValueError('Identity history is truncated')
+        return next((e.sender for t in context.threads for e in [t.root,*t.replies] if e.id==receipt.event_id),None)
+    coordinator_sender=await wait_for(own_sender,timeout=30,label='coordinator transport identity')
     for role,person in mm.users.items():
         await mm.post(role,'W4 registered rehearsal identity: '+person.username)
     for name,stream in zip(('w4-supervisor','w4-first-ad'),workers,strict=True):
@@ -92,7 +103,7 @@ async def identities(bootstrap: Stream, mm: Mattermost, workers: list[Stream], r
         if name in names:
             found[names[name]]=payload['sender']
         if len(found)==len(names):
-            return found
+            return dict(coordinator=coordinator_sender,**found)
     raise RuntimeError('Could not resolve separate authenticated test identities')
 
 
@@ -131,6 +142,7 @@ async def main() -> None:
             take_two_db=database,take_two_identity=DIRECTORY/'w4-coordinator.json',
             take_two_artifacts=DIRECTORY/'artifacts',take_two_renderer_cli=cli,take_two_render_timeout=240,
             switch_production_room_id=room,switch_crew_room_ids=room,take_two_coordinator_name='w4-coordinator',
+            take_two_coordinator_sender_id=senders['coordinator'],
             take_two_director_id=senders['director'],take_two_producer_id=senders['producer'],take_two_ad_id=senders['ad-human'],
             take_two_supervisor_sender_id=senders['w4-supervisor'],take_two_ad_sender_id=senders['w4-first-ad'],
             take_two_supervisor_agent_name='w4-supervisor',take_two_ad_agent_name='w4-first-ad',
@@ -203,6 +215,19 @@ async def main() -> None:
             final=await wait_for(confirmed,timeout=30,label='three current confirmations')
             assert final['revisions']==dict(script=1,constraints=3)
             assert final['releases'][0]['call_sheet_url'] and final['releases'][0]['preview_url']
+            # These assertions inspect the real HTTP state, not local Loop internals.
+            require_unicode(final)
+            assert len(final['changes']) == 3, 'Room chatter became reported changes'
+            assert len([c for c in final['changes'] if c['field']=='report']) == 1
+            assert next(c for c in final['changes'] if c['field']=='report')['reporter_name'] == 'Maya'
+            hard_stop = next(c for c in final['changes'] if c['field']=='hard_stop')
+            assert hard_stop['value']=='18:00' and hard_stop['at']=='2026-11-06T18:00:00+05:30'
+            assert final['decision']['authority_name']=='Arun'
+            assert final['decision']['answer']['answered_by_name']=='Arun'
+            assert all(c['reporter_name'] in ('Nila','Isha','Maya') for c in final['changes'])
+            assert all(p['role_label'] for p in final['crew'])
+            assert all(p['room_name']=='#production' for r in final['releases'] for p in r['publications'])
+            assert not any('@switch-' in t['text'] for t in final['timeline'])
             summary=dict(revisions=final['revisions'],release='r2',status=final['releases'][0]['status'],
                 publication='accepted by Switch for relay',room='w4-production (Mattermost)',discord='no Discord bridge yet',
                 scenes=[dict(number=s['number'],validity=s['validity'],location=s['plan']['location']) for s in final['scenes']],

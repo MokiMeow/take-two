@@ -3,7 +3,9 @@
 from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
+from typing import Any
+from coordinator.unicode_text import require_unicode
 
 
 def _ist(value: str) -> str:
@@ -24,6 +26,11 @@ ChangeStatus = Literal["recorded", "pending_confirmation", "rejected"]
 
 class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_max_length=4096)
+
+    @model_validator(mode='before')
+    @classmethod
+    def valid_unicode(cls, value: Any) -> Any:
+        return require_unicode(value)
 
 
 class Production(WireModel):
@@ -70,6 +77,8 @@ class ChangeCommand(WireModel):
 class Change(ChangeCommand):
     id: NonEmpty
     at: Timestamp
+    recorded_at: Timestamp | None = None
+    reporter_name: NonEmpty | None = None
     status: ChangeStatus
     source: Literal["mattermost", "discord", "control_room"]
     constraints_rev: Positive | None = None
@@ -117,6 +126,7 @@ class Answer(WireModel):
     candidate_id: NonEmpty
     note: str | None = None
     answered_by: NonEmpty
+    answered_by_name: NonEmpty | None = None
     at: Timestamp
 
 
@@ -125,6 +135,7 @@ class Decision(WireModel):
     status: Literal["open", "answered", "expired", "closed_outdated", "rejected_unauthorized"]
     question: NonEmpty
     authority: NonEmpty
+    authority_name: NonEmpty | None = None
     bound: Revisions
     opened_at: Timestamp
     expires_at: Timestamp
@@ -136,6 +147,7 @@ class Decision(WireModel):
 
 class Publication(WireModel):
     room: NonEmpty
+    room_name: NonEmpty | None = None
     platform: Literal["discord", "mattermost"]
     status: Literal["pending", "sent", "uncertain", "failed"]
 
@@ -168,6 +180,7 @@ class CrewMember(WireModel):
     id: NonEmpty
     name: NonEmpty
     role: NonEmpty
+    role_label: NonEmpty | None = None
     call_time: Timestamp | None = None
     acked_release: Positive | None = None
     affected: bool | None = None

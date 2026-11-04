@@ -66,7 +66,8 @@ class ReleaseTransitions:
                 member['acked_release']=None
         release = dict(release_id=release_id,number=number,status='approved',created_at=stamp,
             manifest_hash=identity['manifest_hash'],summary=summary,preview_url=candidate.get('preview_url'),
-            publications=[dict(room=r,platform=self.destination_platforms.get(r,'discord'),status='pending') for r in self.destinations],
+            publications=[dict(room=r,room_name=self.room_names.get(r,r if r.startswith('#') else 'Crew room'),
+                platform=self.destination_platforms.get(r,'discord'),status='pending') for r in self.destinations],
             acks=dict(expected=expected,confirmed=[],policy='affected_only'))
         state['releases'].insert(0,release)
         self.workflow['releases'][release_id] = dict(script_rev=self.constraints.script_rev,

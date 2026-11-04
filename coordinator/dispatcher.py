@@ -361,6 +361,7 @@ class Dispatcher:
                         if isinstance(error,SwitchError):
                             diagnostic+=': '+str(error)[:160]
                         destination=effect['payload'].get('room_id') or self.production_room_id
+                        destination=getattr(self.loop,'room_names',{}).get(destination, 'Crew room')
                         self.ledger.effect_status(effect['id'], status, error=diagnostic)
                         self._notice(f"{effect['kind']} {status} ({diagnostic}, room {destination}); review before retrying.",
                             effect['payload'].get('release_id') or effect['payload'].get('job_id'),

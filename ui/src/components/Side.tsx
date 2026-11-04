@@ -35,7 +35,7 @@ export function DecisionCard({ state, focus, onFocus }: { state: State; focus: s
   const ruled = d.candidates.filter((c) => c.check.result !== "pass");
   const chosen = d.answer && d.candidates.find((c) => c.candidate_id === d.answer!.candidate_id);
   const sceneId = d.candidates[0]?.manifest.scene_id;
-  const who = whoOf(state.crew, d.authority);
+  const who = d.authority_name ?? whoOf(state.crew, d.authority);
 
   return (
     <motion.section layout className="card decision" data-status={d.status} transition={{ duration: 0.3, ease: EASE }}>
@@ -51,7 +51,7 @@ export function DecisionCard({ state, focus, onFocus }: { state: State; focus: s
         {d.status === "answered" && chosen ? (
           <motion.div key="answered" className="answer" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.28, ease: EASE }}>
             <SetModel c={chosen} state={state} />
-            <p className="answer-line">{whoOf(state.crew, d.answer!.answered_by)} chose <b>{chosen.label}</b>.</p>
+            <p className="answer-line">{d.answer!.answered_by_name ?? whoOf(state.crew, d.answer!.answered_by)} chose <b>{chosen.label}</b>.</p>
             {d.answer!.note && <blockquote>“{d.answer!.note}”</blockquote>}
             <p className="answer-meta">{hhmm(d.answer!.at, tz)} · answered in Switch</p>
           </motion.div>
@@ -120,8 +120,8 @@ export function ReleaseCard({ state, onSheet }: { state: State; onSheet: (url: s
 }
 
 // Room names as people know them; a bare room id falls back to its platform.
-function roomsOf(pubs: { room: string; platform: string }[]): string {
-  const names = pubs.map((p) => (/^[0-9a-f-]{20,}$/i.test(p.room) ? (p.platform === "discord" ? "Discord" : "production room") : p.room));
+function roomsOf(pubs: { room: string; room_name?: string; platform: string }[]): string {
+  const names = pubs.map((p) => p.room_name ?? (/^[0-9a-f-]{20,}$/i.test(p.room) ? (p.platform === "discord" ? "Discord" : "production room") : p.room));
   return [...new Set(names)].join(", ") || "nobody yet";
 }
 
@@ -146,7 +146,7 @@ export function CrewCard({ state }: { state: State }) {
               <span className="avatar">{initials(c.name)}</span>
               <div className="person">
                 <p>{c.name}</p>
-                <small>{roleLabel(c.role)}</small>
+                <small>{c.role_label ?? roleLabel(c.role)}</small>
               </div>
               <span className="call">{c.call_time ? hhmm(c.call_time, tz) : "--:--"}</span>
               <AnimatePresence mode="popLayout" initial={false}>

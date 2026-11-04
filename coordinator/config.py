@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     take_two_renderer_cli: Path = Path('render/cli.mjs')
     take_two_discord_bridge: str = ''
     take_two_coordinator_name: str = 'take-two-coordinator'
+    take_two_coordinator_sender_id: str = ''
+    take_two_room_names: dict[str,str] = Field(default_factory=dict,max_length=20)
     take_two_day_actor: str = ''
     take_two_day_camera: str = ''
     take_two_day_sound: str = ''

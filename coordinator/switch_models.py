@@ -10,8 +10,9 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic.alias_generators import to_camel
+from coordinator.unicode_text import require_unicode
 
 
 class WireModel(BaseModel):
@@ -73,6 +74,11 @@ class SwitchFrame(WireModel):
     event: str
     data: dict[str, Any] = Field(default_factory=dict)
     id: int | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def valid_unicode(cls, value: Any) -> Any:
+        return require_unicode(value)
 
 
 class DocumentResult(BaseModel):
@@ -166,6 +172,8 @@ class HistoryEntry(BaseModel):
     kind: str
     sender: str = Field(max_length=512)
     sender_name: str = Field(default='',max_length=512)
+    sender_kind: str | None = None
+    thread_id: str | None = Field(default=None,max_length=512)
     body: str | None = Field(default=None,max_length=65536)
     timestamp: int | None = None
 

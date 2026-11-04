@@ -21,6 +21,7 @@ from uuid import uuid4
 import httpx
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
+from coordinator.unicode_text import require_unicode
 
 from coordinator.switch_models import (
     ApprovalOutcome, DocumentResult, Identity, InternalDocument, MessageReceipt,
@@ -171,7 +172,8 @@ class SwitchClient:
                 if len(body) > 4 * 1024 * 1024:
                     raise SwitchError("Switch response exceeds the 4 MiB limit")
             try:
-                return json.loads(body)
+                # Decode once after collecting chunks; never decode partial UTF-8.
+                return require_unicode(json.loads(body.decode('utf-8', errors='strict')))
             except (ValueError, UnicodeDecodeError) as exc:
                 raise SwitchError("Switch returned invalid JSON") from exc
 

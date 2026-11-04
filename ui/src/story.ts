@@ -176,7 +176,9 @@ export function dayWindow(s: State): { from: number; to: number } {
   const H = 3600_000;
   const tzm = /([+-])(\d\d):(\d\d)$/.exec(s.production.now);
   const off = tzm ? (tzm[1] === "-" ? -1 : 1) * (+tzm[2] * 60 + +tzm[3]) * 60_000 : 0;
-  const lo = Math.min(...times) + off - 20 * 60_000;
+  // Leave a little room before the first scene, but never a whole empty hour for "now".
+  const firstPlan = Math.min(...times.filter((t) => t !== now));
+  const lo = Math.min(Math.min(...times), firstPlan - 20 * 60_000) + off;
   const hi = Math.max(...times) + off;
   return { from: Math.floor(lo / H) * H - off, to: Math.ceil(hi / H) * H - off };
 }

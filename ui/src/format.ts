@@ -50,11 +50,20 @@ export function paperFor(releaseNumber: number) {
 const INTERIORS = new Set(["stairwell", "studio", "apartment", "office", "cafe", "hall", "corridor"]);
 
 export function stripFor(location: string | undefined, start: string | undefined, sunset = "18:00") {
+  if (!location) return { heading: "SET TO BE SCHEDULED", bg: "#E6E2D6", planned: false };
   const ext = location ? !INTERIORS.has(location.toLowerCase()) : false;
   const night = start ? hhmm(start) >= sunset : false;
   const heading = `${ext ? "EXT" : "INT"}. ${(location ?? "TBD").toUpperCase()} – ${night ? "NIGHT" : "DAY"}`;
   const bg = ext ? (night ? "#A8D5A2" : "#F2E27A") : night ? "#9DC3E6" : "#F4F1E8";
-  return { heading, bg };
+  return { heading, bg, planned: true };
+}
+
+// "2026-11-06" or "Day 1 - 6 November" → a short human label.
+export function dayLabel(day: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return day.replace(" - ", " · ");
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" });
 }
 
 export function initials(name: string): string {

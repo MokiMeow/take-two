@@ -7,6 +7,10 @@ import { mediaUrl } from "../data";
 import { Pill, Stamp } from "./bits";
 import "./Decision.css";
 
+function listJoin(xs: string[]): string {
+  return xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+}
+
 function fmtLeft(m: number): string {
   const h = Math.floor(m / 60), r = m % 60;
   return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
@@ -33,9 +37,13 @@ export function Headline({ state }: { state: State }) {
     kicker = "Plans changed again"; tone = "hold";
     line = "That question is outdated.";
     sub = `It was asked on constraints r${d!.bound.constraints}; the facts are now r${state.revisions.constraints}. New options are on the way.`;
+  } else if (!latest && held.length) {
+    kicker = "Planning";
+    line = "No plan released yet.";
+    sub = held[0].hold_reason ?? "The first schedule needs the director's approval.";
   } else if (held.length) {
     kicker = "On hold"; tone = "hold";
-    line = `Scene ${held.map((h) => h.number).join(" & ")} is on hold.`;
+    line = held.length === 1 ? `Scene ${held[0].number} is on hold.` : `Scenes ${listJoin(held.map((h) => String(h.number)))} are on hold.`;
     sub = held[0].hold_reason;
   } else if (d?.status === "answered" && d.answer) {
     const chosen = d.candidates.find((c) => c.candidate_id === d.answer!.candidate_id);

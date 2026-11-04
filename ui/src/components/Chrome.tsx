@@ -5,7 +5,7 @@ import {
   Plus, Robot, ShieldCheck, Warning, X, type Icon,
 } from "@phosphor-icons/react";
 import type { ChangeCommand, State, TimelineItem, TimelineKind } from "../types";
-import { hhmm } from "../format";
+import { dayLabel, hhmm } from "../format";
 import { fixtures, postChange, type Source } from "../data";
 import { Section, Slate, StatusDot } from "./bits";
 import "./Chrome.css";
@@ -18,7 +18,7 @@ export function TopBar({ state, source, setFixture }: { state: State; source: So
         <Slate take={take} />
         <div className="topbar-title">
           <span className="serif topbar-film">{state.production.title}</span>
-          <span className="mono faint topbar-day">{state.production.day}</span>
+          <span className="mono faint topbar-day">{dayLabel(state.production.day)}</span>
         </div>
       </div>
       <div className="topbar-right">

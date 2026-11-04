@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { CrewMember, Scene } from "../types";
-import { span, stripFor } from "../format";
+import { dayLabel, span, stripFor } from "../format";
 import { Section, Stamp } from "./bits";
 import "./Stripboard.css";
 
@@ -16,7 +16,7 @@ export function Stripboard({ scenes, crew, day, tz }: { scenes: Scene[]; crew: C
           <Strip key={s.id} scene={s} castNo={castNo} tz={tz} />
         ))}
         <li className="daybreak">
-          <span className="mono">END OF {day.split(" - ")[0].toUpperCase()}</span>
+          <span className="mono">END OF {dayLabel(day).split(" · ")[0].toUpperCase()}</span>
           <span className="mono faint">{scenes.length} SC</span>
         </li>
       </ol>
@@ -41,7 +41,7 @@ function Strip({ scene, castNo, tz }: { scene: Scene; castNo: (id: string) => nu
       <div className="strip-num mono">{scene.number}</div>
       <div className="strip-main paper">
         <div className="strip-row">
-          <span className={`strip-heading mono ${held ? "struck" : ""}`}>{strip.heading}</span>
+          <span className={`strip-heading mono ${held && strip.planned ? "struck" : ""}`}>{strip.heading}</span>
           {plan && <span className="strip-time mono">{span(plan.start, plan.end, tz)}</span>}
         </div>
         <div className="strip-row">

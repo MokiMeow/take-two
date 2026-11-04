@@ -36,7 +36,7 @@ interface Props {
 
 export function Schedule({ state, ghosts, focus, onFocus }: Props) {
   const tz = state.production.timezone;
-  const { from, to } = dayWindow(state);
+  const { from, to } = dayWindow(state, Object.values(ghosts));
   const span = to - from;
   const pos = (iso: string) => ((+new Date(iso) - from) / span) * 100;
   const frac = (a: string, b: string) => (+new Date(b) - +new Date(a)) / span;

@@ -187,8 +187,9 @@ export function sceneOf(s: State, c: Candidate): Scene | undefined {
 }
 
 // Hours shown on the plan: one hour before the first block to one after the last.
-export function dayWindow(s: State): { from: number; to: number } {
+export function dayWindow(s: State, extra: { start: string; end: string }[] = []): { from: number; to: number } {
   const times: number[] = [];
+  for (const x of extra) times.push(+new Date(x.start), +new Date(x.end));
   for (const sc of s.scenes) if (sc.plan) times.push(+new Date(sc.plan.start), +new Date(sc.plan.end));
   for (const c of s.decision?.candidates ?? []) for (const m of rowsOf(c)) times.push(+new Date(m.start), +new Date(m.end));
   for (const m of marks(s)) times.push(+new Date(m.at));

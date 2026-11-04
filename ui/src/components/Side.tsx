@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ArrowBendUpLeft, Check, Clock, FileText, Warning } from "@phosphor-icons/react";
 import type { State } from "../types";
 import { hhmm, initials } from "../format";
-import { currentRelease, nameOf, pendingCrew } from "../story";
+import { currentRelease, humanize, pendingCrew, roleLabel, who as whoOf } from "../story";
 import { mediaUrl } from "../data";
 import { useMemo } from "react";
 import type { Candidate } from "../types";
@@ -35,7 +35,7 @@ export function DecisionCard({ state, focus, onFocus }: { state: State; focus: s
   const ruled = d.candidates.filter((c) => c.check.result !== "pass");
   const chosen = d.answer && d.candidates.find((c) => c.candidate_id === d.answer!.candidate_id);
   const sceneId = d.candidates[0]?.manifest.scene_id;
-  const who = d.authority.match(/\((.*)\)/)?.[1] ?? d.authority;
+  const who = whoOf(state.crew, d.authority);
 
   return (
     <motion.section layout className="card decision" data-status={d.status} transition={{ duration: 0.3, ease: EASE }}>
@@ -51,13 +51,18 @@ export function DecisionCard({ state, focus, onFocus }: { state: State; focus: s
         {d.status === "answered" && chosen ? (
           <motion.div key="answered" className="answer" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.28, ease: EASE }}>
             <SetModel c={chosen} state={state} />
-            <p className="answer-line">{nameOf(state.crew, d.answer!.answered_by)} chose <b>{chosen.label}</b>.</p>
+            <p className="answer-line">{whoOf(state.crew, d.answer!.answered_by)} chose <b>{chosen.label}</b>.</p>
             {d.answer!.note && <blockquote>“{d.answer!.note}”</blockquote>}
             <p className="answer-meta">{hhmm(d.answer!.at, tz)} · answered in Switch</p>
           </motion.div>
         ) : (
           <motion.div key="open" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }}>
             <p className="question">{d.question}</p>
+            {d.must_keep && d.must_keep.length > 0 && (
+              <p className="must-keep" title={d.requirements_note}>
+                <span>Story must keep</span> {d.must_keep.join("; ")}
+              </p>
+            )}
             <ul className="choices" data-stale={d.status === "closed_outdated"}>
               {passing.map((c, i) => (
                 <motion.li
@@ -102,7 +107,7 @@ export function ReleaseCard({ state, onSheet }: { state: State; onSheet: (url: s
             Release {r.number}
           </motion.span>
         </AnimatePresence>
-        <span className="card-meta">{hhmm(r.created_at, tz)} · sent to {r.publications.map((p) => p.room).join(", ")}</span>
+        <span className="card-meta">{hhmm(r.created_at, tz)} · sent to {roomsOf(r.publications)}</span>
       </header>
       <p className="rel-summary">{r.summary}</p>
       {sheet && (
@@ -112,6 +117,12 @@ export function ReleaseCard({ state, onSheet }: { state: State; onSheet: (url: s
       )}
     </motion.section>
   );
+}
+
+// Room names as people know them; a bare room id falls back to its platform.
+function roomsOf(pubs: { room: string; platform: string }[]): string {
+  const names = pubs.map((p) => (/^[0-9a-f-]{20,}$/i.test(p.room) ? (p.platform === "discord" ? "Discord" : "production room") : p.room));
+  return [...new Set(names)].join(", ") || "nobody yet";
 }
 
 export function CrewCard({ state }: { state: State }) {
@@ -135,7 +146,7 @@ export function CrewCard({ state }: { state: State }) {
               <span className="avatar">{initials(c.name)}</span>
               <div className="person">
                 <p>{c.name}</p>
-                <small>{c.role}</small>
+                <small>{roleLabel(c.role)}</small>
               </div>
               <span className="call">{c.call_time ? hhmm(c.call_time, tz) : "--:--"}</span>
               <AnimatePresence mode="popLayout" initial={false}>
@@ -158,7 +169,7 @@ export function CrewCard({ state }: { state: State }) {
       <AnimatePresence initial={false}>
         {stale && (
           <motion.p key={stale.at} className="stale" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3, ease: EASE }}>
-            <ArrowBendUpLeft size={13} weight="bold" /> {stale.text}
+            <ArrowBendUpLeft size={13} weight="bold" /> {humanize(state.crew, stale.text)}
           </motion.p>
         )}
       </AnimatePresence>

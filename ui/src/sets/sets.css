@@ -13,3 +13,17 @@
   background: radial-gradient(120% 90% at 50% 40%, #232a2f, #1a1f22);
 }
 .set.iso svg { display: block; width: 100%; height: auto; }
+
+.set.iso { --set-glow: #f1b84c22; }
+
+/* Entrance, once per option: the cast step onto their marks, then the camera's view fades in. */
+.set .set-pawn {
+  animation: set-pawn-in 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: calc(0.18s + var(--i) * 0.09s);
+}
+.set .set-cone { animation: set-fade-in 0.45s ease-out 0.45s both; }
+@keyframes set-pawn-in { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes set-fade-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .set .set-pawn, .set .set-cone { animation: none; }
+}

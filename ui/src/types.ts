@@ -82,6 +82,9 @@ export interface Decision {
   expires_at: string;
   candidates: Candidate[];
   answer?: { candidate_id: string; note?: string; answered_by: string; at: string };
+  // Script supervisor's story requirements, shown as prose for the director (not machine-checked).
+  must_keep?: string[];
+  requirements_note?: string;
 }
 
 export interface Release {

@@ -12,8 +12,44 @@ export interface Story {
 }
 
 export const nameOf = (crew: CrewMember[], id: string) => crew.find((c) => c.id === id)?.name ?? title(id);
-// "Director (Arun)" -> "Arun"
-const personOf = (authority: string) => /\((.*?)\)/.exec(authority)?.[1] ?? authority;
+
+// A person as the crew would say it. Accepts a crew id, "Director (Arun)", or a raw Switch/Matrix
+// id such as "@switch-mattermost-<uuid>-w4-director:localhost" (-> "Director").
+export function who(crew: CrewMember[], raw: string | undefined): string {
+  if (!raw) return "Someone";
+  const named = crew.find((c) => c.id === raw);
+  if (named) return named.name;
+  const paren = /\((.*?)\)/.exec(raw)?.[1];
+  if (paren) return paren;
+  if (raw.startsWith("@")) {
+    if (/^@switch-agent-/.test(raw)) return "Take Two";
+    const tail = raw.slice(1).split(":")[0].split("-").pop() ?? raw;
+    return nameOf(crew, tail);
+  }
+  return raw;
+}
+const personOf = (authority: string) => who([], authority);
+
+// Replace raw Switch ids inside coordinator text with names.
+export function humanize(crew: CrewMember[], text: string): string {
+  return text.replace(/@switch-[A-Za-z0-9-]+:[A-Za-z0-9.-]+/g, (m) => who(crew, m));
+}
+
+// A hard stop may arrive as "18:00" (production local time) or as a full timestamp.
+export function asInstant(s: State, value: string): string | null {
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return value;
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  const ref = s.scenes.find((x) => x.plan)?.plan?.start ?? s.production.now;
+  if (!hm || !ref) return null;
+  const off = /([+-]\d\d:\d\d|Z)$/.exec(ref)?.[1] ?? "Z";
+  return `${ref.slice(0, 10)}T${hm[1].padStart(2, "0")}:${hm[2]}:00${off}`;
+}
+
+export function roleLabel(role: string): string {
+  const map: Record<string, string> = { actor: "Actor", camera_sound: "Camera / sound", camera: "Camera", sound: "Sound", director: "Director" };
+  if (map[role]) return map[role];
+  return role.includes("/") ? role : title(role);
+}
 
 export function listJoin(xs: string[]): string {
   if (xs.length <= 1) return xs.join("");
@@ -48,7 +84,7 @@ export function story(s: State): Story {
     };
   }
   if (d?.status === "closed_outdated") {
-    const latest = s.changes[0];
+    const latest = s.changes.find((c) => c.status === "recorded");
     const fact = latest ? changeSentence(s, latest) : "The facts changed.";
     return {
       tone: "stop",
@@ -80,7 +116,7 @@ export function story(s: State): Story {
 
 export function changeSentence(s: State, c: State["changes"][number]): string {
   const tz = s.production.timezone;
-  if (c.entity === "person" && /stop|leave/.test(c.field)) return `${nameOf(s.crew, c.target)} must leave at ${hhmm(c.value, tz)}.`;
+  if (c.entity === "person" && /stop|leave/.test(c.field)) return `${nameOf(s.crew, c.target)} must leave at ${hhmm(asInstant(s, c.value) ?? c.value, tz)}.`;
   if (c.entity === "location" && c.field === "permission") return `${title(c.target)} permission ${c.value}.`;
   return `${title(c.target)} ${c.field.replace(/_/g, " ")}: ${c.value}.`;
 }
@@ -109,8 +145,9 @@ export interface Mark {
 export function marks(s: State): Mark[] {
   const out: Mark[] = [];
   for (const c of s.changes) {
-    if (c.entity === "person" && /stop|leave/.test(c.field) && c.status !== "rejected") {
-      out.push({ at: c.value, label: `${nameOf(s.crew, c.target)} leaves`, who: c.target, tone: "stop" });
+    if (c.entity === "person" && /stop|leave/.test(c.field) && c.status === "recorded") {
+      const at = asInstant(s, c.value);
+      if (at) out.push({ at, label: `${nameOf(s.crew, c.target)} leaves`, who: c.target, tone: "stop" });
     }
   }
   return out;
@@ -131,12 +168,15 @@ export function dayWindow(s: State): { from: number; to: number } {
   for (const sc of s.scenes) if (sc.plan) times.push(+new Date(sc.plan.start), +new Date(sc.plan.end));
   for (const c of s.decision?.candidates ?? []) times.push(+new Date(c.manifest.start), +new Date(c.manifest.end));
   for (const m of marks(s)) times.push(+new Date(m.at));
-  times.push(+new Date(s.production.now));
+  // "Now" widens the board only on the shoot day itself.
+  const now = +new Date(s.production.now);
+  if (times.length && now > Math.min(...times) - 3 * 3600_000 && now < Math.max(...times) + 3600_000) times.push(now);
+  if (!times.length) times.push(now);
   // Round to whole hours in the production's own timezone (offset taken from "now").
   const H = 3600_000;
   const tzm = /([+-])(\d\d):(\d\d)$/.exec(s.production.now);
   const off = tzm ? (tzm[1] === "-" ? -1 : 1) * (+tzm[2] * 60 + +tzm[3]) * 60_000 : 0;
-  const lo = Math.min(...times) + off;
+  const lo = Math.min(...times) + off - 20 * 60_000;
   const hi = Math.max(...times) + off;
   return { from: Math.floor(lo / H) * H - off, to: Math.ceil(hi / H) * H - off };
 }

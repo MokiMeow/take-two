@@ -8,7 +8,7 @@ import {
 import type { ChangeCommand, State, TimelineKind } from "../types";
 import { dayLabel, hhmm } from "../format";
 import { fixtures, postChange, type Source } from "../data";
-import { BEATS, beat, story } from "../story";
+import { BEATS, beat, humanize, story } from "../story";
 import "./Shell.css";
 
 const EASE = [0.23, 1, 0.32, 1] as const;
@@ -29,7 +29,7 @@ export function TopBar({ state, source, setFixture, onHistory, onReport }: {
       <div className="top-actions">
         {source.kind === "fixture" ? (
           <div className="replay" role="group" aria-label="Demo replay">
-            <span>Replay</span>
+            <span className="replay-label">Replay</span>
             {fixtures.map((f, i) => (
               <button key={f.name} aria-pressed={i === source.index} title={f.name} onClick={() => setFixture(i)}>{i + 1}</button>
             ))}
@@ -41,9 +41,9 @@ export function TopBar({ state, source, setFixture, onHistory, onReport }: {
           </span>
         )}
         <span className="clock">{hhmm(state.production.now, state.production.timezone)}</span>
-        <button className="btn" onClick={onHistory}><ClockCounterClockwise size={15} /> History</button>
+        <button className="btn" onClick={onHistory}><ClockCounterClockwise size={15} /> <span>History</span></button>
         <button className="btn btn-primary" onClick={onReport} disabled={!live} title={live ? undefined : "Connect to the coordinator to report a change"}>
-          <Plus size={15} weight="bold" /> Report a change
+          <Plus size={15} weight="bold" /> <span>Report a change</span>
         </button>
       </div>
     </header>
@@ -129,13 +129,13 @@ export function History({ state, open, onClose }: { state: State; open: boolean;
               <button className="icon-btn" onClick={onClose} aria-label="Close history"><X size={16} /></button>
             </header>
             <ol className="events">
-              {state.timeline.map((t, i) => {
+              {groupRepeats(state.timeline.map((t) => ({ ...t, text: humanize(state.crew, t.text) }))).map(({ item: t, count }, i) => {
                 const I = KIND_ICON[t.kind] ?? Lightning;
                 return (
                   <li key={`${t.at}-${i}`} data-kind={t.kind}>
                     <span className="ev-icon"><I size={13} weight="bold" /></span>
                     <span className="ev-time">{hhmm(t.at, tz)}</span>
-                    <p>{t.text}</p>
+                    <p>{t.text}{count > 1 && <span className="ev-count">×{count}</span>}</p>
                   </li>
                 );
               })}
@@ -145,6 +145,17 @@ export function History({ state, open, onClose }: { state: State; open: boolean;
       )}
     </AnimatePresence>
   );
+}
+
+// Consecutive identical entries collapse into one line with a count.
+function groupRepeats<T extends { text: string; kind: string }>(items: T[]): { item: T; count: number }[] {
+  const out: { item: T; count: number }[] = [];
+  for (const item of items) {
+    const last = out[out.length - 1];
+    if (last && last.item.text === item.text && last.item.kind === item.kind) last.count++;
+    else out.push({ item, count: 1 });
+  }
+  return out;
 }
 
 function Dialog({ open, onClose, label, children, wide }: { open: boolean; onClose: () => void; label: string; children: React.ReactNode; wide?: boolean }) {

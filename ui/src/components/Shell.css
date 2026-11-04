@@ -234,3 +234,11 @@
 @media (prefers-reduced-motion: reduce) {
   .dialog[open] { animation: none; }
 }
+.ev-count { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--raised-2); font: 600 10px var(--mono); color: var(--secondary); }
+@media (max-width: 760px) {
+  .topbar { gap: 10px; }
+  .replay-label { display: none; }
+  .replay { padding: 0 4px; }
+  .replay button { width: 22px; }
+  .btn { padding: 0 10px; }
+}

@@ -26,10 +26,10 @@ export function maquette(input: MaquetteInput): string {
   const P = k.fitProjection(corners, W, H, { pad: 8, azimuth: 34, elevation: 26 });
   const ctx = new Ctx(P);
 
-  ctx.plate();
+  ctx.plate(input.location);
   set.build(ctx);
   const marks = set.marks.slice(0, Math.max(1, Math.min(2, input.people.length)));
-  marks.forEach((m, i) => ctx.pawn(m, input.names[input.people[i]]?.[0] ?? String(i + 1)));
+  marks.forEach((m, i) => ctx.pawn(m, input.names[input.people[i]]?.[0] ?? String(i + 1), i));
   ctx.camera(set.camera, set.aim, input.shots.length);
 
   return k.figureSvg({
@@ -69,7 +69,7 @@ class Ctx {
     this.add(key ?? [x, y, z], this.S(k.cylinder(x, y, r, z, h, this.P, 28), { tone }));
   }
 
-  plate() {
+  plate(_name: string) {
     const P = this.P;
     const out = [`<path class="iso-halo" d="${k.haloOf(PLATE, -PLATE_H, PLATE_H, P)}"/>`];
     out.push(this.S(k.slabOf(PLATE, -PLATE_H, PLATE_H, P, 8, 1.4), { tone: "mid" }));
@@ -86,7 +86,7 @@ class Ctx {
   }
 
   // A cast member as a model-maker's figure: base disc, body, head. Initial engraved on the base.
-  pawn(m: { x: number; y: number; z: number; sit?: boolean }, initial: string) {
+  pawn(m: { x: number; y: number; z: number; sit?: boolean }, initial: string, order = 0) {
     const { x, y, z } = m;
     const body = m.sit ? 12 : 21;
     const P = this.P;
@@ -96,7 +96,7 @@ class Ctx {
       this.S(k.cylinder(x, y, 3.6, z + body + (m.sit ? 0.8 : 2.4), 6.2, P, 28, 1.6), { tone: "hi", lit: true }),
       m.sit ? "" : k.faceTextSvg(k.topMatrix([x + 5, y + 0.9], z + 1.6, P, "x"), initial, { size: 3.4, tone: "lo", anchor: "middle" }),
     ];
-    this.add([x + 4, y + 10, z + 0.1], parts.join(""));
+    this.add([x + 4, y + 10, z + 0.1], `<g class="set-pawn" style="--i:${order}">${parts.join("")}</g>`);
   }
 
   // Tripod, camera body and lens pointing at `aim`; the view cone lies on the floor.
@@ -114,8 +114,7 @@ class Ctx {
     const r = [c.x + dir[0] * reach - side[0] * half, c.y + dir[1] * reach - side[1] * half];
     const cone = [tip, l, r].map(([x, y]) => this.at([x, y, 0.15]));
     const d = `M${cone.map((p: number[]) => p.join(",")).join("L")}Z`;
-    this.under.push(`<path d="${d}" style="fill:var(--set-cone);stroke:none"/>`);
-    this.under.push(this.L(`M${cone[0].join(",")}L${cone[1].join(",")}M${cone[0].join(",")}L${cone[2].join(",")}`, { tone: "lit", dashed: true }));
+    this.under.push(`<g class="set-cone"><path d="${d}" style="fill:var(--set-cone);stroke:none"/>${this.L(`M${cone[0].join(",")}L${cone[1].join(",")}M${cone[0].join(",")}L${cone[2].join(",")}`, { tone: "lit", dashed: true })}</g>`);
 
     // Extra set-ups as tape marks on the floor, stepped back along the camera's side.
     const tapes: string[] = [];
@@ -124,7 +123,7 @@ class Ctx {
       const ty = c.y - dir[1] * (8 + i * 9) + side[1] * (i % 2 ? 10 : -10);
       tapes.push(k.lineOnTop([tx - 3, ty], [tx + 3, ty], 0.2, P), k.lineOnTop([tx, ty - 3], [tx, ty + 3], 0.2, P));
     }
-    if (tapes.length) this.under.push(this.L(tapes.join(""), { tone: "hi" }));
+    if (tapes.length) this.under.push(`<g class="set-cone">${this.L(tapes.join(""), { tone: "hi" })}</g>`);
 
     const legs = [0, 1, 2].map((i) => {
       const a = ang + Math.PI + (i - 1) * 2.1;
@@ -169,9 +168,17 @@ const wallBack = (c: Ctx, h: number, windows = true) => {
       const e = c.at([x + 7, PLATE.y + 8, h - 6]);
       const f = c.at([x - 7, PLATE.y + 8, h - 6]);
       lines.push(`M${a}L${b}L${e}L${f}Z`);
+      const mid = (p: number[], q: number[]) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      lines.push(`M${mid(a, f)}L${mid(b, e)}M${mid(a, b)}L${mid(f, e)}`);
     }
   }
-  c.add([PLATE.x + PLATE.w / 2, PLATE.y + 8.1, 0], c.L(lines.join(""), { tone: "faint" }));
+  // A door in the side wall: frame, panel line and a handle.
+  const dx = PLATE.x + 8;
+  const door = [[dx, 14, 0], [dx, 14, 30], [dx, 32, 30], [dx, 32, 0]].map((p) => c.at(p as Pt));
+  lines.push(`M${door.map((p: number[]) => p.join(",")).join("L")}`);
+  lines.push(`M${c.at([dx, 17, 3])}L${c.at([dx, 17, 27])}L${c.at([dx, 29, 27])}L${c.at([dx, 29, 3])}Z`);
+  c.add([PLATE.x + PLATE.w / 2, PLATE.y + 8.1, 0], c.L(lines.join(""), { tone: "lo" }));
+  c.add([dx, 30, 1], c.D([c.at([dx, 27, 14])], { size: 0.55, tone: "hi" }));
 };
 
 const SETS: Record<string, SetDef> = {
@@ -193,6 +200,12 @@ const SETS: Record<string, SetDef> = {
       // Handrail on posts along the open (front-left) side of the flight.
       const posts = [0, 3, 6, 8].map((i) => ({ y: front - i * run - 2, z: rise * i }));
       posts.forEach(({ y, z }) => c.cyl(-3, y, 1, z, 22, "mid", [-3, y - 4, z]));
+      const bal: string[] = [];
+      for (let i = 0; i < 8; i++) {
+        const y = front - i * run - run / 2;
+        bal.push(`M${c.at([-3, y, rise * (i + 1)])}L${c.at([-3, y, rise * (i + 0.5) + 22])}`);
+      }
+      c.add([-3, front - 40, 2], c.L(bal.join(""), { tone: "mid" }));
       const rail = posts.map(({ y, z }) => c.at([-3, y, z + 22]));
       c.add([-3, front - 70, 30], c.L(`M${rail.map((p: number[]) => p.join(",")).join("L")}`, { tone: "hi" }));
     },
@@ -211,6 +224,19 @@ const SETS: Record<string, SetDef> = {
       for (const x of [-24, 14]) c.slab({ x, y: -2, w: 3, d: 12, r: 0.4 }, 0.6, 8, "mid");
       for (let i = 0; i < 3; i++) c.slab({ x: -26, y: -2 + i * 4, w: 43, d: 3.2, r: 0.4 }, 8.6, 1.2, "hi");
       for (const z of [12, 17]) c.slab({ x: -26, y: -4, w: 43, d: 2, r: 0.4 }, z, 2.4, "hi");
+      for (const x of [-27, 15]) c.slab({ x, y: -3, w: 3, d: 13, r: 0.6 }, 9.8, 5, "mid");
+      // Grass: a sparse, even stipple on the lawn (deterministic jitter).
+      const tufts: number[][] = [];
+      for (let gx = PLATE.x + 14; gx < PLATE.x + PLATE.w - 10; gx += 11)
+        for (let gy = PLATE.y + 12; gy < PLATE.y + PLATE.d - 12; gy += 9) {
+          const j = Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453;
+          const fx = gx + ((j - Math.floor(j)) - 0.5) * 6;
+          const fy = gy + ((j * 7 - Math.floor(j * 7)) - 0.5) * 5;
+          if (fy > 16 && fy < 36) continue;
+          if (Math.abs(fx + 5) < 32 && Math.abs(fy - 3) < 14) continue;
+          tufts.push(c.at([fx, fy, 0.6]));
+        }
+      c.under.push(c.D(tufts, { size: 0.5, tone: "lo" }));
       // Trees: trunk and a stack of canopy discs.
       for (const [x, y, s] of [[-78, -44, 0.75], [70, -50, 0.65], [-86, 40, 0.55]] as const) {
         c.cyl(x, y, 2.2 * s, 0.6, 26 * s, "lo", [x, y, 1]);
@@ -219,6 +245,8 @@ const SETS: Record<string, SetDef> = {
       // Lamp post.
       c.cyl(46, -18, 1.1, 0.6, 30, "mid", [46, -18, 1]);
       c.slab({ x: 43, y: -21, w: 6, d: 6, r: 1 }, 30.6, 4, "hi");
+      const lamp = c.at([46, -18, 32]);
+      c.over.push(`<circle cx="${lamp[0]}" cy="${lamp[1]}" r="9" style="fill:var(--set-glow)"/>`);
       // Passers-by on the path: the people who make the scene less private.
       for (const [x, y] of [[-60, 26], [-44, 28], [72, 24]]) {
         c.cyl(x, y, 2.2, 1, 10, "mid", [x, y, 1]);

@@ -31,3 +31,13 @@
   .sheet { --label: 132px; padding: 16px 14px 12px; overflow-x: auto; }
 }
 .main-col { display: grid; gap: 12px; min-width: 0; }
+@media (max-width: 1080px) {
+  /* One column: the board, then the decision, then the crew. */
+  .main-col { display: contents; }
+  .sheet { order: 1; }
+  .side { order: 2; }
+  .crew { order: 3; }
+}
+@media (max-width: 760px) {
+  .sheet-hours span:nth-child(even) { visibility: hidden; }
+}

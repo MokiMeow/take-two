@@ -183,3 +183,19 @@
 .choices li > .set { grid-area: set; margin: -4px -6px 2px; }
 .choices li > .letter { grid-area: letter; }
 .answer > .set { margin: 0 0 10px; }
+
+.card { min-width: 0; overflow-wrap: anywhere; }
+.must-keep {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--secondary);
+}
+.must-keep span {
+  display: inline-block;
+  margin-right: 6px;
+  font: 600 10px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--go);
+}

@@ -116,7 +116,7 @@ export function Schedule({ state, ghosts, focus, onFocus }: Props) {
                   animate={{ scaleY: 1 }}
                   transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
                 />
-                <motion.span className="mark-label" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.25 }}>
+                <motion.span className="mark-label" data-edge={pos(k.at) > 85 ? "right" : pos(k.at) < 15 ? "left" : undefined} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.25 }}>
                   {k.label} {hhmm(k.at, tz)}
                 </motion.span>
               </motion.div>

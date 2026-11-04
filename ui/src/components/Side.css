@@ -200,3 +200,19 @@
   color: var(--go);
 }
 .state[data-tone="carry"] { color: var(--faint); background: #ffffff0a; }
+
+/* What changed for a person who still has to confirm. */
+.since { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.since li { font-size: 11px; line-height: 1.35; color: var(--hold); }
+.crew .people li { align-items: start; }
+
+/* Crew messages waiting for a person to record them. */
+.pending { box-shadow: var(--lift), inset 0 0 0 1px #f1b84c40; }
+.reports { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.reports p { margin: 0; font-size: 13px; line-height: 1.4; }
+.reports small { display: block; margin-top: 3px; font-size: 11px; color: var(--faint); }
+.crew .people li { grid-template-areas: "av person state" "av call state" "since since since"; }
+.crew .since { grid-area: since; margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--rule); }
+.crew .people > li > .since { grid-column: 1 / -1; grid-row: 3; }
+.crew .people { align-items: start; }
+.people .since li { display: block; padding: 0; border: 0; border-radius: 0; background: none; }

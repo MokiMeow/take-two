@@ -125,6 +125,31 @@ function roomsOf(pubs: { room: string; room_name?: string; platform: string }[])
   return [...new Set(names)].join(", ") || "nobody yet";
 }
 
+// Drop lines that restate an unchanged value, such as "Call 14:45 (was 14:45)".
+function isRealChange(line: string): boolean {
+  const m = /(\d\d:\d\d) \(was (\d\d:\d\d)\)/.exec(line);
+  return !(m && m[1] === m[2]);
+}
+
+// Crew messages waiting for the responsible person to record or ignore them.
+export function PendingCard({ state }: { state: State }) {
+  const pending = state.changes.filter((c) => c.status === "pending_confirmation" && !c.resolution).slice(0, 3);
+  if (!pending.length) return null;
+  return (
+    <motion.section layout className="card pending" transition={{ duration: 0.3, ease: EASE }}>
+      <header className="card-head"><span className="dot dot-ask" /> Waiting on a person</header>
+      <ul className="reports">
+        {pending.map((c) => (
+          <li key={c.id}>
+            <p><b>{c.reporter_name ?? whoOf(state.crew, c.reporter)}</b> said “{c.value}”</p>
+            <small>A proposed change waits for the responsible person to record it. Nothing changes until they do.</small>
+          </li>
+        ))}
+      </ul>
+    </motion.section>
+  );
+}
+
 export function CrewCard({ state }: { state: State }) {
   const r = currentRelease(state);
   const tz = state.production.timezone;
@@ -167,6 +192,11 @@ export function CrewCard({ state }: { state: State }) {
                   {ok ? <><Check size={11} weight="bold" /> r{r!.number}</> : late ? (c.acked_release ? `on r${c.acked_release}` : "waiting") : c.acked_release ? <><Check size={11} weight="bold" /> r{c.acked_release}</> : "—"}
                 </motion.span>
               </AnimatePresence>
+              {late && c.since_confirmed && c.since_confirmed.length > 0 && (
+                <ul className="since" title={c.since_confirmed.join(" · ")}>
+                  {c.since_confirmed.filter(isRealChange).slice(0, 3).map((l) => <li key={l}>{l.replace(/_/g, " ")}</li>)}
+                </ul>
+              )}
             </li>
           );
         })}

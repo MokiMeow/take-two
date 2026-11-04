@@ -3,7 +3,7 @@ import { MotionConfig } from "motion/react";
 import { fixtures, useProductionState } from "./data";
 import type { ScenePlan, State } from "./types";
 import { Schedule } from "./components/Schedule";
-import { CrewCard, DecisionCard, ReleaseCard } from "./components/Side";
+import { CrewCard, DecisionCard, PendingCard, ReleaseCard } from "./components/Side";
 import { History, Lead, ReportDialog, SheetDialog, TopBar } from "./components/Shell";
 import "./App.css";
 
@@ -62,6 +62,7 @@ export default function App() {
             <CrewCard state={state} />
           </div>
           <aside className="side">
+            <PendingCard state={state} />
             <DecisionCard state={state} focus={focus} onFocus={setFocus} />
             {!(state.decision && ["open", "closed_outdated"].includes(state.decision.status)) && <ReleaseCard state={state} onSheet={setSheet} />}
           </aside>

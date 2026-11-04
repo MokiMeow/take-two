@@ -39,6 +39,8 @@ export interface Change {
   source: "mattermost" | "discord" | "control_room";
   constraints_rev?: number;
   reporter_name?: string;
+  // Reports only: how a crew message was handled (W9).
+  resolution?: "recorded" | "ignored" | "superseded" | null;
 }
 
 export interface Job {
@@ -100,6 +102,7 @@ export interface Release {
   summary: string;
   call_sheet_url?: string;
   preview_url?: string;
+  duty_changes?: Record<string, string[]>;
   publications: { room: string; room_name?: string; platform: "discord" | "mattermost"; status: PublicationStatus }[];
   acks: {
     expected: string[];
@@ -116,6 +119,8 @@ export interface CrewMember {
   acked_release?: number;
   affected?: boolean;
   role_label?: string;
+  // What changed for this person since the release they last confirmed.
+  since_confirmed?: string[];
 }
 
 export type TimelineKind =

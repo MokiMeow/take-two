@@ -1,0 +1,23 @@
+{
+  "name": "take-two-render",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.539",
+    "@remotion/cli": "4.0.539",
+    "@remotion/fonts": "4.0.539",
+    "@remotion/renderer": "4.0.539",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.539",
+    "zod": "3.22.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.2",
+    "typescript": "5.8.3"
+  }
+}

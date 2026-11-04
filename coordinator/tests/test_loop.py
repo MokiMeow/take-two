@@ -20,7 +20,11 @@ def loop(tmp_path):
     with ledger.transaction():
         ledger.save_state(state)
     facts = Constraints.model_validate(yaml.safe_load((ROOT / 'fixtures/film/constraints-r1.yaml').read_text()))
-    return Loop(ledger, None, facts, authorities={'creative': ['arun'], 'location_permission': ['producer'], 'availability_confirmation': ['first-ad-human']}, clock=lambda: datetime.fromisoformat('2026-11-06T14:00:00+05:30'))
+    from coordinator.tests.w4_support import metadata as trusted_metadata
+    metadata=trusted_metadata()
+    result = Loop(ledger, None, facts, metadata=metadata, authorities={'creative': ['arun'], 'location_permission': ['producer'], 'availability_confirmation': ['first-ad-human']}, clock=lambda: datetime.fromisoformat('2026-11-06T14:00:00+05:30'))
+    result.workflow['plans']={scene['id']:dict(scene_id=scene['id'],**scene['plan'],shots=['wide'],capabilities=['sound_recorder'],script_rev=1,constraints_rev=1,requires_light=False) for scene in state['scenes']}
+    return result
 
 async def change(loop, **kwargs):
     data = dict(entity='location', target='rooftop', field='permission', value='refused', reporter='producer')
@@ -70,7 +74,8 @@ async def test_authorized_answer_commits_exact_release_once(loop):
     assert len(state['releases']) == 2
     assert state['releases'][0]['status'] == 'approved'
     assert question['payload'] == original
-    assert state['releases'][0]['manifest_hash'] == question['candidates'][0]['manifest_hash']
+    assert loop.workflow['releases']['r2']['envelope']['approved_candidate_hash'] == question['candidates'][0]['manifest_hash']
+    assert state['releases'][0]['manifest_hash'] != question['candidates'][0]['manifest_hash']
     State.model_validate(state)
 
 @pytest.mark.asyncio
@@ -140,7 +145,7 @@ async def test_safety_hold_requires_named_clearance_even_after_creative_approval
 @pytest.mark.asyncio
 async def test_restart_rejects_old_outcome_and_preserves_exact_question(loop):
     q = await propose(loop)
-    restored = Loop(loop.ledger,None,loop.constraints,authorities=loop.authorities,clock=loop.clock)
+    restored = Loop(loop.ledger,None,loop.constraints,authorities=loop.authorities,clock=loop.clock,metadata=loop.metadata)
     assert restored.workflow['question']['payload'] == q['payload']
     await restored.handle_outcome(dict(session_id=q['session_id'],request_id=q['request_id'],answered_by='arun',candidate_id='stairs'))
     assert len(restored.ledger.snapshot_state()['releases']) == 2
@@ -179,7 +184,7 @@ async def test_rendered_question_waits_for_bound_previews_and_release_contains_a
     q = loop.workflow['question']
     await loop.handle_outcome(dict(session_id=q['session_id'],request_id=q['request_id'],answered_by='arun',candidate_id='stairs'))
     effect = next(e for e in loop.ledger.pending_effects() if e['kind']=='release')
-    assert [s['scene_id'] for s in effect['payload']['snapshot']['scenes']] == ['s1','s2','s3']
+    assert [s['scene_id'] for s in effect['payload']['envelope']['manifest']['scenes']] == ['s1','s2','s3']
     assert effect['payload']['preview_url'] == '/media/stairs.mp4'
 
 @pytest.mark.asyncio
@@ -249,6 +254,8 @@ async def test_neither_note_becomes_unverified_hard_rule_for_one_more_round(loop
     assert loop.workflow['jobs'][-1]['role'] == 'script-supervisor'
     assert loop.workflow['decision_round'] == 2
     assert len(loop.ledger.snapshot_state()['releases']) == 1
+    row=loop.ledger.connection.execute('SELECT status FROM questions WHERE id=?',(q['request_id'],)).fetchone()
+    assert row['status']=='answered'
 
 @pytest.mark.asyncio
 async def test_second_neither_hands_off_without_another_agent_round(loop):

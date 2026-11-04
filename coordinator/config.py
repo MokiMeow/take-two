@@ -24,10 +24,17 @@ class Settings(BaseSettings):
     take_two_ad_agent_name: str = ''
     take_two_tz: str = 'Asia/Kolkata'
     take_two_db: Path = Path('data/ledger.sqlite')
-    take_two_artifacts: Path = Path('out')
+    take_two_artifacts: Path = Path('data/artifacts')
     take_two_identity: Path = Path('data/identity.json')
     take_two_dev: bool = False
-    take_two_render_timeout: int = Field(default=120, ge=1, le=300)
+    take_two_render_timeout: int = Field(default=180, ge=1, le=300)
+    take_two_renderer_cli: Path = Path('render/cli.mjs')
+    take_two_discord_bridge: str = ''
+    take_two_coordinator_name: str = 'take-two-coordinator'
+    take_two_day_actor: str = ''
+    take_two_day_camera: str = ''
+    take_two_day_sound: str = ''
+    take_two_crew_identities: dict[str,str] = Field(default_factory=dict,max_length=30)
 
     @property
     def crew_room_ids(self) -> list[str]:

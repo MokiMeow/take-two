@@ -110,6 +110,7 @@ class Candidate(WireModel):
     manifest_hash: NonEmpty
     preview_url: MediaURL | None = None
     preview_status: Literal["none", "rendering", "ready", "failed"]
+    schedule: Annotated[list[CandidateManifest], Field(max_length=20)] | None = None
 
 
 class Answer(WireModel):
@@ -129,6 +130,8 @@ class Decision(WireModel):
     expires_at: Timestamp
     candidates: Annotated[list[Candidate], Field(max_length=20)]
     answer: Answer | None = None
+    must_keep: Annotated[list[str], Field(max_length=100)] | None = None
+    requirements_note: str | None = None
 
 
 class Publication(WireModel):

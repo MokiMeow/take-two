@@ -22,36 +22,41 @@ from coordinator.render_bridge import RenderBridge
 from coordinator.switch_client import SwitchClient, TakenOver
 from coordinator.switch_models import ApprovalOutcome, SwitchFrame
 from coordinator.ui_models import ChangeCommand, State
+from coordinator.recovery import Recovery
+from coordinator.rooms import DayRooms
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 class ScriptScene(BaseModel):
-    id: str
-    number: int
-    title: str
-    hard: list[str]
-    preferences: list[str]
+    id: str = Field(min_length=1,max_length=64)
+    number: int = Field(ge=1,le=999)
+    title: str = Field(min_length=1,max_length=80)
+    hard: list[str] = Field(max_length=40)
+    preferences: list[str] = Field(max_length=40)
+    people: list[str] = Field(max_length=8)
+    required_capabilities: list[str] = Field(max_length=30)
 
 
 class Script(BaseModel):
-    title: str
+    title: str = Field(min_length=1,max_length=80)
     timezone: str
     shoot_day: str
+    shoot_day_number: int = Field(ge=1, le=999)
     script_rev: int
-    scenes: list[ScriptScene] = Field(max_length=200)
+    scenes: list[ScriptScene] = Field(max_length=20)
 
 
 class CrewPerson(BaseModel):
-    id: str
-    name: str
-    role: str
-    switch_identity: str
+    id: str = Field(min_length=1,max_length=64)
+    name: str = Field(min_length=1,max_length=40)
+    role: str = Field(min_length=1,max_length=60)
+    switch_identity: str = Field(min_length=1,max_length=512)
 
 
 class Crew(BaseModel):
     production_id: str
-    crew: list[CrewPerson] = Field(max_length=500)
+    crew: list[CrewPerson] = Field(max_length=30)
 
 
 class ChatPayload(BaseModel):
@@ -92,23 +97,34 @@ def initial_state() -> dict:
     crew = Crew.model_validate(read_yaml('crew.yaml'))
     # Fixture approvals are illustrative. A live database begins with no claimed human decision.
     state = dict(production=dict(id=crew.production_id, title=script.title, timezone=script.timezone,
-                 now=now_iso(), day=script.shoot_day), revisions=dict(script=script.script_rev, constraints=1),
-                 scenes=[dict(**scene.model_dump(), validity='held', hold_reason='Awaiting reviewed initial schedule')
+                 now=now_iso(), day=f"Day {script.shoot_day_number} - {datetime.fromisoformat(script.shoot_day).day} {datetime.fromisoformat(script.shoot_day):%B}"), revisions=dict(script=script.script_rev, constraints=1),
+                 scenes=[dict(**scene.model_dump(exclude={'people','required_capabilities'}), validity='held', hold_reason='Awaiting reviewed initial schedule')
                          for scene in script.scenes], changes=[], jobs=[], decision=None, releases=[],
                  crew=[dict(id=p.id, name=p.name, role=p.role) for p in crew.crew], timeline=[])
     return State.model_validate(state).model_dump(mode='json')
 
 
-class Runtime:
+class Runtime(Recovery, DayRooms):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.ledger = Ledger(settings.take_two_db, initial_state=initial_state())
         self.client = SwitchClient(settings.switch_api_url, settings.take_two_identity,
             settings.switch_registration_key.get_secret_value(),
             production_room_id=settings.switch_production_room_id or None)
-        self.renderer = RenderBridge(settings.take_two_artifacts, cli=ROOT/'render/cli.mjs',
+        self.renderer = RenderBridge(settings.take_two_artifacts, cli=settings.take_two_renderer_cli,
                                      timeout=settings.take_two_render_timeout)
         facts = Constraints.model_validate(read_yaml('constraints-r1.yaml'))
+        script = Script.model_validate(read_yaml('script.yaml'))
+        crew = Crew.model_validate(read_yaml('crew.yaml'))
+        trusted = facts.model_dump(mode='json')
+        for scene in trusted['scenes']:
+            reviewed = next(s for s in script.scenes if s.id==scene['id'])
+            scene.update(required_people=reviewed.people,required_capabilities=reviewed.required_capabilities)
+        facts = Constraints.model_validate(trusted)
+        metadata = dict(production=dict(title=script.title,day=f'Day {script.shoot_day_number}',
+            date=f"{datetime.fromisoformat(script.shoot_day):%A} {datetime.fromisoformat(script.shoot_day).day} {datetime.fromisoformat(script.shoot_day):%B %Y}",
+            timezone=script.timezone),scenes=[s.model_dump() for s in script.scenes],
+            crew=[p.model_dump(exclude={'switch_identity'}) for p in crew.crew])
         self.loop = Loop(self.ledger, None, facts, renderer=self.renderer,
             authorities={'creative': [settings.take_two_director_id] if settings.take_two_director_id else [],
                          'location_permission': [settings.take_two_producer_id] if settings.take_two_producer_id else [],
@@ -120,25 +136,34 @@ class Runtime:
                 ('first-ad', settings.take_two_ad_sender_id)) if value},
             worker_names={role: value for role,value in (
                 ('script-supervisor', settings.take_two_supervisor_agent_name),
-                ('first-ad', settings.take_two_ad_agent_name)) if value}, destinations=settings.crew_room_ids)
+                ('first-ad', settings.take_two_ad_agent_name)) if value}, destinations=settings.crew_room_ids,
+            metadata=metadata,destination_platforms={settings.switch_production_room_id:'mattermost'})
         crew = Crew.model_validate(read_yaml('crew.yaml'))
         self.crew_ids = {member.switch_identity: member.id for member in crew.crew}
+        if not set(settings.take_two_crew_identities.values()) <= {p.id for p in crew.crew}:
+            raise ValueError('Configured crew identities must map to reviewed crew IDs')
+        self.crew_ids.update(settings.take_two_crew_identities)
         self.dispatcher: Dispatcher | None = None
         self.stop = asyncio.Event()
         self.tasks: list[asyncio.Task] = []
         self.ready = False
+        self.transport_epoch = 0
+        self.catching_up = True
+        self.client.on_transport_lost = self.transport_lost
         source_script = read_yaml('script.yaml')
         self.source_mismatch = self.ledger.get_meta('source_script', source_script) != source_script
         with self.ledger.transaction():
             if self.ledger.get_meta('source_script') is None:
                 self.ledger.set_meta('source_script', source_script)
+            if self.ledger.get_meta('history_since') is None:
+                self.ledger.set_meta('history_since',now_iso())
         if self.source_mismatch:
             self.notice('Script fixture differs from the persisted script; restart reconciliation is paused.', visible=False)
 
     def notice(self, text: str, *, visible: bool = True) -> None:
         with self.ledger.transaction():
             self.ledger.timeline('error', text)
-            if visible and self.ready and self.settings.switch_production_room_id:
+            if visible and self.settings.switch_production_room_id:
                 self.ledger.enqueue('message', dict(room_id=self.settings.switch_production_room_id, body=text),
                     f'notice:{datetime.now().timestamp()}', self.loop.constraints.constraints_rev)
 
@@ -152,8 +177,7 @@ class Runtime:
             await self.client.initialize()
             self.client.set_session_id(self.loop.session_id)
             position = self.ledger.get_meta('event_position')
-            if position is not None:
-                self.client.resume_from(position)
+            self.client.resume_from(position or {})
             self.loop.switch = self.client
             self.loop.coordinator_id = self.client.identity.agent_id
         except Exception as error:
@@ -162,7 +186,7 @@ class Runtime:
         self.tasks = [asyncio.create_task(self.consume()), asyncio.create_task(self.service())]
 
     async def connected(self) -> None:
-        self.ready = False
+        self.transport_lost()
         room_id = self.settings.switch_production_room_id
         if not room_id:
             self.notice('Switch connected. Set SWITCH_PRODUCTION_ROOM_ID in .env to enable documents and decisions.', visible=False)
@@ -172,9 +196,9 @@ class Runtime:
             production_room_id=room_id, crew_room_ids=self.settings.crew_room_ids, renderer=self.renderer,
             enabled=lambda: self.ready)
         await self.reconcile_documents(room)
-        for outcome in await self.client.get_outcomes():
-            await self.loop.handle_outcome(outcome)
-        self.ready = True
+        await self.provision_day()
+        await self.begin_catchup()
+        await self.finish_catchup()
 
     async def reconcile_documents(self, room: dict) -> None:
         documents = room.get('documents') or []
@@ -182,7 +206,7 @@ class Runtime:
             ('script-r1', json.dumps(self.ledger.get_meta('source_script'), ensure_ascii=False)),
             (f'constraints-r{self.loop.constraints.constraints_rev}', self.loop.constraints.model_dump_json())):
             matches = [doc for doc in documents if doc.get('name') == name]
-            known = self.ledger.get_meta('document:' + name)
+            known = self.ledger.get_meta('doc:' + name)
             if known or matches:
                 document_id = known or matches[0]['id']
                 await self.client.update_room_document(document_id, content)
@@ -191,7 +215,7 @@ class Runtime:
                     'Coordinator-owned, revisioned facts. Agents read and propose; humans decide.', content)
                 document_id = document.document_id
             with self.ledger.transaction():
-                self.ledger.set_meta('document:' + name, document_id)
+                self.ledger.set_meta('doc:' + name, document_id)
 
     async def consume(self) -> None:
         try:
@@ -205,27 +229,34 @@ class Runtime:
                     self.notice('Switch history needs reconciliation; releases paused. Review history before restarting.', visible=False)
                     break
                 await self.accept_frame(frame)
+                await self.finish_catchup()
         except TakenOver:
             self.ready = False
             self.notice('Switch connection taken over. Coordinator stopped; restart only after resolving ownership.', visible=False)
             self.stop.set()
         except Exception as error:
-            self.ready = False
-            self.notice(f'Switch stream failed ({type(error).__name__}); releases paused.', visible=False)
+            self.transport_lost()
+            self.notice(f'Switch consume failed ({type(error).__name__}); effects paused.',visible=False)
 
     async def accept_frame(self, frame: SwitchFrame) -> None:
         """Stable dedupe and cursor are committed with the handler's state/effects."""
         serialized = frame.model_dump(mode='json')
-        key = hashlib.sha256(json.dumps(serialized, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        if self.ledger.has_event(key):
-            return
+        frame_key = hashlib.sha256(json.dumps(serialized, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        message_id = frame.data.get('payload',{}).get('message_id') if frame.event=='message' else None
+        key = f"message:{frame.data.get('room_id')}:{message_id}" if message_id else frame_key
         position = dict(frame.data.get('position') or {})
         if not position and frame.id is not None:
             position['s'] = frame.id
+        if self.ledger.has_event(key):
+            with self.ledger.transaction():
+                self.ledger.record_event('cursor:'+frame_key,position,serialized)
+            self.client.mark_processed(frame)
+            return
         with self.ledger.processing_event(key, position, serialized):
             try:
                 await self.process_frame(frame)
             except Exception as error:
+                self.transport_lost()
                 self.notice(f'Event quarantined ({type(error).__name__}); no unvalidated action was applied.')
             if not self.ledger.has_event(key):
                 with self.ledger.transaction():
@@ -233,8 +264,14 @@ class Runtime:
         self.client.mark_processed(frame)
 
     async def process_frame(self, frame: SwitchFrame) -> None:
+        if frame.event=='room_released':
+            self.transport_lost()
+            self.catchup_through=None
+            self.notice('Switch room ownership was released; effects paused until reconnect.',visible=False)
+            return
         if frame.event == 'approval_outcome':
-            await self.loop.handle_outcome(ApprovalOutcome.model_validate(frame.data))
+            if self.ready:
+                await self.loop.handle_outcome(ApprovalOutcome.model_validate(frame.data))
             return
         if frame.event == 'command':
             command = CommandEvent.model_validate(frame.data)
@@ -243,16 +280,27 @@ class Runtime:
                 message_id='command:' + hashlib.sha256(json.dumps(frame.model_dump(mode='json'),sort_keys=True).encode()).hexdigest()))
             event.payload.body += (' ' + command.payload.args) if command.payload.args else ''
         elif frame.event == 'message':
+            raw = frame.data.get('payload',{})
+            if raw.get('sender') in self.loop.worker_ids.values() and isinstance(raw.get('body'),str):
+                await self.loop.handle_worker_reply(raw['body'],sender_id=raw['sender'])
+                return
             event = ChatEvent.model_validate(frame.data)
         else:
             return
         message = event.payload
+        if re.search(r"(?i)(failed to relay|couldn.t be relayed|attachment not relayed|incomplete attachment group|bridge delivery failed)",message.body):
+            self.notice(f'Switch bridge delivery error observed in room {event.room_id}; external delivery is unverified.')
         if message.sender == self.client.identity.agent_id:
+            return
+        plan = re.fullmatch(r'/plan\s+(day-[1-9][0-9]{0,2})',message.body.strip())
+        if plan:
+            await self.loop.request_plan(plan[1],message.sender,message.message_id)
             return
         if message.sender in self.loop.worker_ids.values():
             await self.loop.handle_worker_reply(message.body, sender_id=message.sender)
             return
-        if message.sender_kind in ('agent', 'platform'):
+        known_authority = any(message.sender in identities for identities in self.loop.authorities.values())
+        if message.sender_kind in ('agent', 'platform') and not known_authority and message.sender not in self.crew_ids:
             return
         crew_person = self.crew_ids.get(message.sender)
         confirmation = re.fullmatch(r'confirm\s+(r[1-9][0-9]{0,5})', message.body.strip(), re.IGNORECASE)
@@ -280,7 +328,16 @@ class Runtime:
         if not current or current['release_id'] == referenced:
             return False
         with self.ledger.transaction():
-            text = f"That's release {referenced}. Current plan is release {current['release_id']}. {current['summary']} Please confirm {current['release_id']}."
+            person = self.crew_ids.get(event.payload.sender)
+            name = next((p['name'] for p in self.ledger.snapshot_state()['crew'] if p['id']==person),event.payload.sender_name or 'Crew')
+            internal=self.loop.workflow['releases'].get(current['release_id'],{})
+            m=internal.get('candidate',{}).get('manifest')
+            detail=current['summary']
+            if m:
+                from coordinator.render_props import hhmm
+                number=next(s['number'] for s in self.ledger.snapshot_state()['scenes'] if s['id']==m['scene_id'])
+                detail=f"Scene {number} → {m['location']}, {hhmm(m['start'])}"
+            text = f'@{name} that was release {referenced.removeprefix("r")}. The current plan is release {current["number"]} ({detail}). Please reply "confirm {current["release_id"]}".'
             self.ledger.timeline('stale_reply', text, referenced)
             self.ledger.enqueue('message', dict(room_id=event.room_id, body=text),
                 'stale:' + event.payload.message_id, self.loop.constraints.constraints_rev)
@@ -288,19 +345,9 @@ class Runtime:
 
     async def handle_ui_change(self, command: ChangeCommand) -> dict:
         """The browser reports facts; only authenticated Switch identities confirm them."""
-        from uuid import uuid4
-        key = str(uuid4())
-        state = self.ledger.snapshot_state()
-        with self.ledger.transaction():
-            state['changes'].insert(0, dict(**command.model_dump(), id=key, at=now_iso(),
-                status='pending_confirmation', source='control_room'))
-            state['changes'] = state['changes'][:200]
-            self.ledger.save_state(state)
-            self.ledger.timeline('change', 'Control Room report awaits confirmation by an authenticated Switch authority.', key)
-            self.ledger.enqueue('message', dict(room_id=self.settings.switch_production_room_id,
-                body=f'Report pending: {command.target} {command.field}. Confirm in Switch with the structured /change command.'),
-                'ui-report:' + key, self.loop.constraints.constraints_rev)
-        return dict(change_id=key, status='pending_confirmation', reason='Confirm this report in Switch using your authorized identity.')
+        untrusted = command.model_copy(update={'reporter':'control-room-untrusted'})
+        response = await self.loop.handle_change(untrusted,source='control_room',authenticated=False)
+        return dict(change_id=response.change_id,status='pending_confirmation',reason='Confirm in Switch using an authenticated authority.')
 
     async def pending_report(self, event: ChatEvent, source: str) -> None:
         message = event.payload
@@ -323,13 +370,16 @@ class Runtime:
         last_outcomes = asyncio.get_running_loop().time()
         while not self.stop.is_set():
             try:
-                await self.loop.tick()
                 if self.ready and self.dispatcher:
-                    await self.dispatcher.run_once()
                     if asyncio.get_running_loop().time() - last_outcomes >= 15:
                         for outcome in await self.client.get_outcomes():
                             await self.loop.handle_outcome(outcome)
                         last_outcomes = asyncio.get_running_loop().time()
+                    await self.loop.tick()
+                    await self.dispatcher.run_once()
+                elif self.catching_up and getattr(self,'catchup_deadline',None) and asyncio.get_running_loop().time()>self.catchup_deadline:
+                    self.catchup_deadline=None
+                    self.notice('Switch catch-up fence was not reached within 45 seconds; effects remain paused.',visible=False)
             except Exception as error:
                 self.ready = False
                 self.notice(f'Coordinator service failed ({type(error).__name__}); effects paused.', visible=False)

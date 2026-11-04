@@ -178,7 +178,7 @@ class Ledger:
         state = self.get_meta('state')
         if state is None:
             return
-        item = {'at': now_iso(), 'kind': kind, 'text': text[:2000]}
+        item = {'at': now_iso(), 'kind': kind, 'text': text[:512]}
         if ref:
             item['ref'] = ref
         state['timeline'] = [item, *state['timeline']][:200]

@@ -89,11 +89,21 @@ async def test_reconciliation_blocks_dispatch_readiness(tmp_path):
     async def reconcile(room):
         entered.set()
         await blocked.wait()
+    async def operation(name, arguments=None):
+        assert name=='list_bridges'
+        return []
     async def outcomes():
         return []
     runtime.client.connect_to_production = connect
     runtime.client.get_outcomes = outcomes
+    runtime.client.operation=operation
     runtime.reconcile_documents = reconcile
+    async def head():
+        return {'s':0}
+    async def rooms():
+        return []
+    runtime.client.head_position=head
+    runtime.client.member_rooms=rooms
     task = asyncio.create_task(runtime.connected())
     await entered.wait()
     assert not runtime.ready

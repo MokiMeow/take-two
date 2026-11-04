@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from coordinator.checker import manifest_hash
+from coordinator.worker_text import extract_reply
 from coordinator.constraints import Constraints, Manifest
 from coordinator.ui_models import ChangeCommand, ChangeResponse, State
 from coordinator.workflow_models import ADReply, SupervisorReply, visible_candidate, release_snapshot, apply_change, check_candidate, normalize_outcome, note_constraints, workflow_transaction
@@ -22,13 +23,19 @@ from coordinator.switch_models import Question, QuestionOption, QuestionPayload
 
 IST = ZoneInfo('Asia/Kolkata')
 
-class Loop:
+from coordinator.release import ReleaseTransitions
+from coordinator.schedules import check_schedule, digest, plans, retained_plans
+
+from coordinator.planning import PlanningTransitions
+
+class Loop(ReleaseTransitions, PlanningTransitions):
     def __init__(self, ledger: Any, switch: Any, constraints: Constraints, renderer: Any = None, *,
                  authorities: dict[str, list[str]] | None = None, worker_ids: dict[str, str] | None = None,
                  worker_names: dict[str,str] | None = None,
                  coordinator_id: str | None = None, clock: Callable[[], datetime] | None = None,
                  destinations: list[str] | None = None, job_timeout: int = 120, retry_backoff: int = 5,
-                 question_ttl: int = 7200) -> None:
+                 question_ttl: int = 7200, metadata: dict[str, Any] | None = None,
+                 destination_platforms: dict[str,str] | None = None) -> None:
         self.ledger, self.switch, self.renderer = ledger, switch, renderer
         self.authorities = authorities or {}
         self.worker_ids = worker_ids or {}
@@ -38,6 +45,8 @@ class Loop:
         self.destinations = ['#crew', '#day-1'] if destinations is None else destinations
         self.job_timeout, self.retry_backoff, self.question_ttl = job_timeout, retry_backoff, question_ttl
         self.lock = asyncio.Lock()
+        self.metadata = metadata or {}
+        self.destination_platforms = destination_platforms or {}
         saved = ledger.get_meta('workflow')
         self.workflow = saved or dict(constraints=constraints.model_dump(mode='json'), jobs=[], question=None,
             closed_questions=[], outcomes=[], candidates=[], holds={}, source_responses={}, releases={})
@@ -92,36 +101,22 @@ class Loop:
             if job['status'] in ('queued','running'):
                 job['status'] = 'cancelled'
         question = self.workflow['question']
-        if question:
+        if question and question['status'] in ('open','expired'):
             question['status']='closed_outdated'
             self.ledger.put('questions',question['request_id'],question,'closed_outdated',question['constraints_rev'])
             self.workflow['closed_questions'] = [*self.workflow['closed_questions'],question['request_id']][-200:]
             self._queue('close_question',dict(request_id=question['request_id']),f"close:{question['request_id']}")
+            self._event(state,'decision','This question is outdated, new options coming.',question['request_id'])
+            self._queue('message',dict(body='This question is outdated, new options coming.'),f"outdated:{question['request_id']}")
             if state.get('decision'):
                 state['decision']['status'] = 'closed_outdated'
-            self.workflow['question'] = None
+        elif question:
+            self.ledger.put('questions',question['request_id'],question,question['status'],question['constraints_rev'])
+        self.workflow['question'] = None
         self.workflow['candidates'] = []
 
-    def _affected(self, command: ChangeCommand, state: dict[str, Any]) -> list[str]:
-        result = []
-        for scene in state['scenes']:
-            plan = scene.get('plan') or {}
-            if (command.entity == 'scene' and scene['id'] == command.target
-                or command.entity == 'location' and plan.get('location') == command.target
-                or command.entity == 'person' and command.target in plan.get('people', [])
-                or command.entity == 'capability'):
-                result.append(scene['id'])
-        return result
-
-    def _hold(self, state: dict[str, Any], scene_ids: list[str], reason: str, ref: str) -> None:
-        for scene in state['scenes']:
-            if scene['id'] in scene_ids:
-                scene.update(validity='held',hold_reason=reason)
-        if scene_ids:
-            self._event(state,'hold',f"{', '.join(scene_ids)} on hold: {reason}",ref)
-            self._queue('hold',dict(scene_ids=scene_ids,body=f"{', '.join(scene_ids)} ON HOLD. {reason}. Update coming."),f'hold:{ref}')
-
-    async def handle_change(self, command: ChangeCommand, *, source: str = 'control_room', source_message_id: str | None = None) -> ChangeResponse:
+    async def handle_change(self, command: ChangeCommand, *, source: str = 'control_room', source_message_id: str | None = None,
+                            authenticated: bool = True) -> ChangeResponse:
         command = ChangeCommand.model_validate(command)
         async with self.lock:
             key = f'{source}:{source_message_id}' if source_message_id else None
@@ -129,7 +124,7 @@ class Loop:
             if prior:
                 return ChangeResponse.model_validate(prior)
             state = self._state()
-            status,reason,facts = apply_change(command,self.constraints,self.authorities,self._now())
+            status,reason,facts = apply_change(command,self.constraints,self.authorities if authenticated else {},self._now())
             change_id = str(uuid4())
             response = ChangeResponse(change_id=change_id,status=status,reason=reason)
             with workflow_transaction(self):
@@ -149,9 +144,14 @@ class Loop:
                 self._event(state,'change',f'{command.reporter}: {command.target} {command.field} {command.value} ({status}).',change_id)
                 affected = self._affected(command,state)
                 if status == 'recorded':
-                    self._hold(state,affected,f'{command.target} {command.field} changed',change_id)
+                    self._hold(state,affected,f'{command.target} {command.field} {command.value}',change_id)
                     state['jobs'] = []
-                    self._job(state,'script-supervisor',dict(change=command.model_dump(),scene_ids=affected))
+                    if affected:
+                        eligible = [sid for sid in affected if sid not in self.workflow['holds']]
+                        if eligible:
+                            self._job(state,'script-supervisor',dict(change=command.model_dump(),scene_ids=eligible))
+                        else:
+                            self._queue('message',dict(body='Safety hold recorded. Named clearance is required before planning a replacement.'),f'safety-wait:{change_id}')
                 elif status == 'pending_confirmation' and command.value in ('refused','unknown'):
                     self._hold(state,affected,'Report requires confirmation',change_id)
                 if key:
@@ -173,7 +173,7 @@ class Loop:
         document = self._queue('document',dict(name=f'constraints-r{job["constraints_rev"]}',
             content=json.dumps(self.constraints.model_dump(mode='json'),ensure_ascii=False,sort_keys=True)),f'constraints-document:{job["constraints_rev"]}')
         body = json.dumps(dict(job_id=job['job_id'],script_rev=job['script_rev'],constraints_rev=job['constraints_rev'],
-            addressed_to=self.coordinator_id, constraints=self.constraints.model_dump(mode='json'),**job['context']),sort_keys=True)
+            attempt=job['attempt'],addressed_to=self.coordinator_id, constraints=self.constraints.model_dump(mode='json'),**job['context']),sort_keys=True)
         self._queue('role_message',dict(role=job['role'],body=body,expected_holder=self.worker_names.get(job['role']),job_id=job['job_id'],depends_on=document),
                     f"job:{job['job_id']}:{job['attempt']}")
 
@@ -201,7 +201,7 @@ class Loop:
             try:
                 if isinstance(payload,str) and len(payload)>65536:
                     raise ValueError('Worker reply too large')
-                data = json.loads(payload) if isinstance(payload,str) else payload
+                data = extract_reply(payload) if isinstance(payload,str) else payload
                 job = next((j for j in self.workflow['jobs'] if j['job_id']==data.get('job_id')),None)
             except (ValueError,TypeError,AttributeError,RecursionError):
                 data, job = {}, next((j for j in reversed(self.workflow['jobs']) if j['status'] in ('queued','running')),None)
@@ -227,9 +227,13 @@ class Loop:
                     reply = (SupervisorReply if job['role']=='script-supervisor' else ADReply).model_validate(data)
                     if isinstance(reply,ADReply) and len({c.candidate_id for c in reply.candidates}) != len(reply.candidates):
                         raise ValueError('Duplicate candidate ids')
-                    if isinstance(reply,ADReply) and any(c.manifest.scene_id not in job['context'].get('scene_ids',[]) for c in reply.candidates):
-                        raise ValueError('Candidate must resolve an affected scene')
-                except (ValidationError,ValueError) as exc:
+                    if isinstance(reply,ADReply):
+                        required = set(job['context'].get('scene_ids',[]))
+                        for c in reply.candidates:
+                            if {m.scene_id for m in c.plans()} != required:
+                                raise ValueError('Candidate must replace every unresolved scene exactly once')
+                        candidates = self._prepare_candidates(reply.candidates,state)
+                except (ValidationError,ValueError,KeyError,StopIteration) as exc:
                     self._retry(state,job,'Invalid structured reply' if isinstance(exc,ValidationError) else str(exc)[:200])
                     self._save(state)
                     return False
@@ -237,28 +241,23 @@ class Loop:
                 self._sync_jobs(state)
                 if isinstance(reply,SupervisorReply):
                     self.workflow['supervisor'] = reply.model_dump()
-                    self._job(state,'first-ad',dict(supervisor=reply.model_dump(),change=job['context'].get('change'),scene_ids=job['context'].get('scene_ids',[])))
+                    self._job(state,'first-ad',dict(**job['context'],supervisor=reply.model_dump()))
                 else:
-                    candidates = []
-                    for candidate in reply.candidates:
-                        manifest = candidate.manifest
-                        result = check_candidate(manifest,self.constraints,state)
-                        item = dict(candidate_id=candidate.candidate_id,label=candidate.label,story_cost=candidate.story_cost,
-                            manifest=manifest.model_dump(mode='json',exclude={'manifest_hash'}),manifest_hash=manifest_hash(manifest),check=result.model_dump(),
-                            preview_status='none',preview_url=None)
-                        candidates.append(item)
-                        self._event(state,'check',f'{candidate.label}: {result.result}.',candidate.candidate_id)
                     self.workflow['candidates'] = candidates
+                    for c in candidates:
+                        self._event(state,'check',f"{c['label']}: {c['check']['result']}.",c['candidate_id'])
                     if any(c['check']['result']=='pass' for c in candidates):
-                        if self.renderer:
-                            for c in candidates:
-                                if c['check']['result']=='pass':
+                        if self.renderer and not job['context'].get('initial_plan'):
+                            for i,c in enumerate(c for c in candidates if c['check']['result']=='pass'):
+                                c['letter']=chr(65+i)
+                                if not job['context'].get('initial_plan'):
                                     c['preview_status']='rendering'
-                                    self._queue('preview', {k:c[k] for k in ('candidate_id','manifest','manifest_hash')},f"preview:{self.constraints.constraints_rev}:{c['manifest_hash']}")
+                                    self._queue('preview', dict(candidate=deepcopy(c),metadata=deepcopy(self.metadata),candidate_id=c['candidate_id'],manifest_hash=c['manifest_hash'],manifest=dict(scenes=c['manifests']) if c.get('manifests') else c['manifest']),f"preview:{self.constraints.constraints_rev}:{c['candidate_id']}:{c['manifest_hash']}")
                         else:
                             self._question(state,candidates)
                     else:
                         self._event(state,'error','No feasible option. Resolve failed or unknown facts before release.')
+                        self._queue('message',dict(body='No feasible option. '+ '; '.join(r for c in candidates for r in c['check']['reasons'])[:1400]),f'no-feasible:{job["job_id"]}')
                 self._save(state)
                 return True
 
@@ -278,12 +277,27 @@ class Loop:
                 options=[QuestionOption(**o) for o in options])]).model_dump(mode='json')
         question = dict(request_id=request_id,turn_id=turn_id,session_id=self.session_id,script_rev=self.constraints.script_rev,
             constraints_rev=self.constraints.constraints_rev,authorized_answerers=allowed,candidates=deepcopy(candidates),
-            expires_at=expiry,payload=payload,status='open')
+            expires_at=expiry,payload=payload,status='open',must_keep=self.workflow.get('supervisor',{}).get('must_keep',[]))
         self.workflow['question'] = question
         state['decision'] = dict(request_id=request_id,status='open',question=prompt,authority=', '.join(allowed) or 'Unconfigured authority',
             bound=dict(script=self.constraints.script_rev,constraints=self.constraints.constraints_rev),opened_at=self._stamp(),
-            expires_at=expiry,candidates=[visible_candidate(c) for c in candidates])
-        self._queue('open_question',dict(payload=payload),f'question:{request_id}')
+            expires_at=expiry,candidates=[visible_candidate(c) for c in candidates],must_keep=question['must_keep'],
+            requirements_note='Supervisor must_keep is human-reviewed prose, not machine-checked. The checker enforces reviewed cast, capabilities and verified story facts.')
+        passing = [c for c in candidates if c['check']['result']=='pass']
+        presentations = []
+        for index,c in enumerate(passing):
+            m = c['manifest']
+            from coordinator.render_props import hhmm
+            summary = f"{chr(65+index)} · {c['label']} · checked pass · {m['location']} {hhmm(m['start'])}–{hhmm(m['end'])}; people: {', '.join(m['people'])}; shots: {', '.join(m['shots'])}. {c['story_cost']} Hash {c['manifest_hash']}"
+            if c.get('manifests'):
+                summary += '\nComplete schedule: '+'; '.join(f"Scene {next(s['number'] for s in self.metadata['scenes'] if s['id']==row['scene_id'])}: {row['location']} {hhmm(row['start'])}–{hhmm(row['end'])}; setup {row['setup_min']}m, wrap {row['wrap_min']}m; people {', '.join(row['people'])}; shots {', '.join(row['shots'])}; kit {', '.join(row['capabilities'])}" for row in c['manifests'])
+            presentations.append(dict(candidate_id=c['candidate_id'],preview_url=c.get('preview_url'),summary=summary,
+                preview_required=not (c.get('manifests') and not state['releases'])))
+            option = payload['questions'][0]['options'][index]
+            option['description'] = summary+' Preview and checked summary posted immediately above this card.'
+        payload['detail'] = 'Supervisor must_keep (human-reviewed prose; not machine-checked): '+ '; '.join(question['must_keep'])
+        payload['questions'][0]['prompt'] += '\n'+payload['detail']
+        self._queue('open_question',dict(payload=payload,presentations=presentations),f'question:{request_id}')
         self._event(state,'decision','A checked plan is ready for the named authority.',request_id)
 
     async def handle_outcome(self, outcome: Any) -> bool:
@@ -301,13 +315,20 @@ class Loop:
                 self.workflow['outcomes'] = [*self.workflow['outcomes'],key][-200:]
                 self._queue('mark_delivered',dict(request_id=request_id,session_id=session_id),f'delivered:{key}')
                 q = self.workflow['question']
-                if not q or q['request_id']!=request_id or q['session_id']!=session_id or not self._bound(q) or q['status']!='open':
+                if not q or q['request_id']!=request_id or q['session_id']!=session_id or not self._bound(q) or q['status'] not in ('open','expired'):
                     self._event(state,'stale_reply','Ignored an outcome for an obsolete decision.',request_id)
                     self._save(state)
                     return False
-                if self._now() >= datetime.fromisoformat(q['expires_at']):
-                    q['status'] = 'expired'
-                    state['decision']['status'] = 'expired'
+                answered_at = outcome.get('answered_at')
+                timely = False
+                if answered_at and outcome.get('state')=='answered':
+                    try:
+                        answered = datetime.fromisoformat(answered_at) if isinstance(answered_at,str) else answered_at
+                        timely = answered.utcoffset() is not None and answered <= datetime.fromisoformat(q['expires_at'])
+                    except (ValueError,TypeError):
+                        pass
+                if outcome.get('state') not in (None,'answered') or ((q['status']=='expired' or self._now() >= datetime.fromisoformat(q['expires_at'])) and not timely):
+                    self._expire(state,q)
                     self._save(state)
                     return False
                 if outcome.get('answered_by') not in q['authorized_answerers']:
@@ -320,11 +341,6 @@ class Loop:
                     self._save(state)
                     return False
                 candidate_id = outcome.get('candidate_id')
-                if outcome.get('state') not in (None, 'answered'):
-                    q['status'] = 'expired'
-                    state['decision']['status'] = 'expired'
-                    self._save(state)
-                    return False
                 candidate = next((c for c in q['candidates'] if c['candidate_id']==candidate_id),None)
                 q['status'] = 'answered'
                 state['decision']['status'] = 'answered'
@@ -334,11 +350,14 @@ class Loop:
                     return False
                 if not candidate:
                     self._event(state,'error','Answer did not identify a checked candidate.',request_id)
+                    self._queue('message',dict(body='Answer did not identify a checked candidate. No release was made.'),f'invalid-answer:{request_id}')
                     self._save(state)
                     return False
                 manifest = Manifest.model_validate(candidate['manifest'])
-                if self.workflow['holds'] or candidate['check']['result']!='pass' or manifest_hash(manifest)!=candidate['manifest_hash'] or check_candidate(manifest,self.constraints,state).result!='pass':
+                if (set(self.workflow['holds']) & {m['scene_id'] for m in plans(candidate)} or candidate['check']['result']!='pass'
+                    or self._candidate_digest(candidate)!=candidate['manifest_hash'] or self._candidate_check(candidate,state).result!='pass'):
                     self._event(state,'error','Approval failed the final feasibility and content check.',request_id)
+                    self._queue('message',dict(body='Approval failed the final feasibility and content check. The hold remains.'),f'failed-approval:{request_id}')
                     self._save(state)
                     return False
                 state['decision']['answer'] = dict(candidate_id=candidate_id,note=outcome.get('note'),answered_by=outcome['answered_by'],at=self._stamp())
@@ -353,7 +372,7 @@ class Loop:
             self._event(state,'decision','Neither selected; director must decide by hand after at most two rounds.',question['request_id'])
             self._queue('message',dict(body='Plan remains held. Director: decide by hand; automated rounds have stopped.'),f"manual:{question['request_id']}")
             return
-        scene_ids = {c['manifest']['scene_id'] for c in question['candidates']}
+        scene_ids = {m['scene_id'] for c in question['candidates'] for m in plans(c)}
         self.constraints = note_constraints(self.constraints,scene_ids,note)
         self._invalidate(state)
         self.workflow['decision_round']=2
@@ -364,80 +383,6 @@ class Loop:
         self._event(state,'decision','Director note is an unverified hard rule; one further round requested.',question['request_id'])
         state['jobs']=[]
         self._job(state,'script-supervisor',dict(scene_ids=sorted(scene_ids),change=dict(director_note=note)))
-
-    def _release(self,state: dict[str, Any],candidate: dict[str, Any],question: dict[str, Any]) -> None:
-        number = max((r['number'] for r in state['releases']),default=0)+1
-        release_id = f'r{number}'
-        m = candidate['manifest']
-        summary = f"{m['scene_id']} moves to {m['location']}, {m['start']} to {m['end']}."
-        expected = [p['id'] for p in state['crew'] if p['id'] in m['people']]
-        for person in state['crew']:
-            person['affected']=person['id'] in expected
-            if person['affected']:
-                person['acked_release']=None
-        release = dict(release_id=release_id,number=number,status='approved',created_at=self._stamp(),
-            manifest_hash=candidate['manifest_hash'],summary=summary,preview_url=candidate.get('preview_url'),
-            publications=[dict(room=r,platform='discord',status='pending') for r in self.destinations],
-            acks=dict(expected=expected,confirmed=[],policy='affected_only'))
-        state['releases'].insert(0,release)
-        self.workflow['releases'][release_id] = dict(script_rev=self.constraints.script_rev,constraints_rev=self.constraints.constraints_rev,
-            candidate=deepcopy(candidate),request_id=question['request_id'])
-        self._queue('release',dict(release_id=release_id,manifest=m,candidate_id=candidate['candidate_id'],manifest_hash=candidate['manifest_hash'],
-            summary=summary,preview_url=candidate.get('preview_url'),destinations=self.destinations,
-            snapshot=release_snapshot(state,m)),f'release:{release_id}')
-        self._event(state,'release',f'Release {number} approved; publication pending.',release_id)
-
-    def effect_current(self, effect: dict[str, Any]) -> bool:
-        kind = effect.get('kind')
-        if kind in ('hold','hold_message','close_question','mark_delivered','message'):
-            return True
-        revision = effect.get('revision')
-        if revision != self.constraints.constraints_rev:
-            return False
-        if kind == 'document':
-            return True
-        payload = effect.get('payload',{})
-        if isinstance(payload,str):
-            payload = json.loads(payload)
-        if kind == 'role_message':
-            job = next((j for j in self.workflow['jobs'] if j['job_id']==payload.get('job_id')),None)
-            return bool(job and self._bound(job) and job['status'] in ('queued','running'))
-        if kind == 'open_question':
-            q = self.workflow['question']
-            return bool(q and q['status']=='open' and q['request_id']==payload['payload']['request_id'] and self._now()<datetime.fromisoformat(q['expires_at']))
-        if kind == 'preview':
-            return any(c['candidate_id']==payload.get('candidate_id') and c['manifest_hash']==payload.get('manifest_hash') and c['preview_status']=='rendering' for c in self.workflow['candidates'])
-        if kind in ('release', 'publication_media', 'publication_text'):
-            release = self.workflow['releases'].get(payload.get('release_id'))
-            return bool(release and not self.workflow['holds'] and self._bound(release) and check_candidate(Manifest.model_validate(release['candidate']['manifest']),self.constraints,self._state()).result=='pass')
-        return False
-
-    async def publication_result(self,release_id: str,room: str,status: str) -> None:
-        async with self.lock:
-            state = self._state()
-            with workflow_transaction(self):
-                release = next((r for r in state['releases'] if r['release_id']==release_id),None)
-                if not release or (release['status'] in ('published','superseded') and
-                        any(p['room']==room and p['status']=='sent' for p in release['publications'])):
-                    return
-                for destination in release['publications']:
-                    if destination['room']==room:
-                        destination['status']=status
-                if all(p['status']=='sent' for p in release['publications']):
-                    release['status']='published'
-                    for other in state['releases']:
-                        if other is not release and other['status']=='published':
-                            other['status']='superseded'
-                    internal = self.workflow['releases'].get(release_id)
-                    if internal and self._bound(internal):
-                        candidate = internal['candidate']
-                        for scene in state['scenes']:
-                            if scene['id']==candidate['manifest']['scene_id']:
-                                scene.update(validity='valid',hold_reason=None,plan={k:v for k,v in visible_candidate(candidate)['manifest'].items() if k in ('location','start','end','setup_min','wrap_min','people')})
-                    else:
-                        self._hold(state,[s['id'] for s in state['scenes'] if s['validity']!='valid'],'A newer change arrived during publication',release_id)
-                    self._event(state,'release',f'{release_id} published.',release_id)
-                self._save(state)
 
     async def confirm(self,person: str,release_id: str) -> bool:
         async with self.lock:
@@ -475,13 +420,17 @@ class Loop:
                         self._retry(state,job,'deadline elapsed',now)
                 q = self.workflow['question']
                 if q and q['status']=='open' and now>=datetime.fromisoformat(q['expires_at']):
-                    q['status']='expired'
-                    state['decision']['status']='expired'
+                    self._expire(state,q)
                     self._queue('close_question',dict(request_id=q['request_id']),f"close:{q['request_id']}")
-                    self._event(state,'decision','Question expired without approval.',q['request_id'])
-                    self._queue('message',dict(body='Decision expired without approval. The hold remains; please request a new decision.'),f"expiry:{q['request_id']}")
                 self._sync_jobs(state)
                 self._save(state)
+
+    def _expire(self, state: dict[str,Any], question: dict[str,Any]) -> None:
+        if question['status']!='expired':
+            self._event(state,'decision','Question expired or closed without approval.',question['request_id'])
+            self._queue('message',dict(body='Decision expired without approval. The hold remains; please request a new decision.'),f"expiry:{question['request_id']}")
+        question['status']='expired'
+        state['decision']['status']='expired'
 
     async def preview_result(self, candidate_id: str, digest: str, url: str | None, status: str) -> bool:
         async with self.lock:

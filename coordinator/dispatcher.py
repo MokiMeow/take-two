@@ -13,8 +13,9 @@ import httpx
 
 from coordinator.ledger import Ledger
 from coordinator.render_bridge import RenderBridge
-from coordinator.switch_client import StaleOperation, SwitchClient
+from coordinator.switch_client import StaleOperation, SwitchClient, SwitchError
 from coordinator.switch_models import QuestionPayload
+from coordinator.render_props import preview_props, callsheet_props, release_text
 
 
 class ObsoleteEffect(Exception):
@@ -74,8 +75,8 @@ class Dispatcher:
                 with suppress(asyncio.CancelledError):
                     await task
 
-    async def _render(self, effect: dict, kind: str, manifest: dict) -> Any:
-        task = asyncio.create_task(self.renderer.render(kind, manifest))
+    async def _render(self, effect: dict, kind: str, manifest: dict, props: dict) -> Any:
+        task = asyncio.create_task(self.renderer.render(kind, manifest, props))
         try:
             async with asyncio.timeout(min(getattr(self.renderer, 'timeout', 120), 300)):
                 while not task.done():
@@ -139,18 +140,19 @@ class Dispatcher:
         notice = ''
         call_sheet: Path | None = None
         try:
-            result = await self._render(effect, 'callsheet', payload.get('snapshot', payload['manifest']))
+            envelope = payload['envelope']
+            result = await self._render(effect, 'callsheet', envelope['manifest'], callsheet_props(envelope))
             self._current(effect)
-            if result.placeholder:
-                raise ValueError('Renderer produced a placeholder.')
+            if result.placeholder or result.manifest_hash!=payload['manifest_hash']:
+                raise ValueError('Call sheet is a placeholder or has the wrong manifest identity.')
             call_sheet = self._path(result.path, '.png')
             self._record_artifact(effect, call_sheet, 'callsheet')
         except ObsoleteEffect:
             raise
-        except Exception:
+        except Exception as error:
             self._current(effect)
             notice = ' Call sheet unavailable; use the complete text plan below.'
-            self._notice(f'{release_id}: call sheet unavailable; publishing a text plan.', release_id)
+            self._notice(f'{release_id}: call sheet unavailable ({str(error)[:512]}); publishing a text plan.', release_id)
         preview: Path | None = None
         if payload.get('preview_url'):
             try:
@@ -174,29 +176,16 @@ class Dispatcher:
 
     @staticmethod
     def _release_text(payload: dict) -> str:
-        lines = [f"Release {payload['release_id']}: {payload.get('summary', '')}"]
-        snapshot = payload.get('snapshot', payload.get('manifest', {}))
-        scenes = snapshot.get('scenes', [snapshot]) if isinstance(snapshot, dict) else snapshot
-        for scene in scenes:
-            if not isinstance(scene, dict):
-                continue
-            if scene.get('validity') in ('held', 'invalid'):
-                lines.append(f"{scene.get('scene_id', scene.get('id', 'Scene'))}: ON HOLD. "
-                    f"{scene.get('hold_reason', 'Awaiting a checked replacement')}.")
-                continue
-            if not scene.get('location'):
-                continue
-            lines.append(f"{scene.get('scene_id', scene.get('id', 'Scene'))}: {scene['location']}; "
-                f"{scene.get('start', '?')}–{scene.get('end', '?')}; setup {scene.get('setup_min', 0)}m, "
-                f"wrap {scene.get('wrap_min', 0)}m; people: {', '.join(scene.get('people', []))}.")
-        lines.append(f"Affected crew: confirm {payload['release_id']} explicitly.")
-        return '\n'.join(lines)
+        return release_text(payload['envelope'])
 
     async def _preview(self, effect: dict) -> None:
         p = effect['payload']
         url, status = None, 'failed'
         try:
-            result = await self._render(effect, 'preview', p['manifest'])
+            candidate, metadata = p['candidate'], p['metadata']
+            scene = next(s for s in metadata['scenes'] if s['id']==candidate['manifest']['scene_id'])
+            props = preview_props(candidate,candidate['letter'],scene,metadata['crew'])
+            result = await self._render(effect, 'preview', p['manifest'], props)
             self._current(effect)
             if result.placeholder or result.manifest_hash != p['manifest_hash']:
                 raise ValueError('Preview is a placeholder or does not match the candidate.')
@@ -205,9 +194,9 @@ class Dispatcher:
             url, status = f'/media/{path.name}', 'ready'
         except ObsoleteEffect:
             raise
-        except Exception:
+        except Exception as error:
             self._current(effect)
-            self._notice(f"{p['candidate_id']}: preview unavailable; option remains text only.", p['candidate_id'])
+            self._notice(f"{p['candidate_id']}: preview unavailable ({str(error)[:512]}); option remains text only.", p['candidate_id'])
         await self.loop.preview_result(p['candidate_id'], p['manifest_hash'], url, status)
 
     async def _document(self, effect: dict) -> None:
@@ -228,11 +217,36 @@ class Dispatcher:
         with self.ledger.transaction():
             self.ledger.set_meta('doc:' + p['name'], result.document_id)
 
+    async def _present_options(self, effect: dict) -> None:
+        """Attachments and checked summaries precede the card, with durable receipts.
+
+        An uncertain upload is never retried automatically. It leaves this effect
+        uncertain, so a question cannot claim a preview the director has not seen.
+        """
+        for option in effect['payload'].get('presentations',[]):
+            key = f"presentation:{effect['key']}:{option['candidate_id']}"
+            if self.ledger.get_meta(key):
+                continue
+            if option.get('preview_url'):
+                try:
+                    receipt = await self._network(effect,lambda: self.client.send_media(self.production_room_id,
+                        self._preview_path(option['preview_url']),caption=option['summary']))
+                except (httpx.TransportError,TimeoutError,ConnectionError):
+                    with self.ledger.transaction():
+                        self.ledger.set_meta('presentation_uncertain:'+effect['id'],True)
+                    raise
+            else:
+                suffix = ' Preview unavailable; text only.' if option.get('preview_required',True) else ' Initial schedule approval; no creative preview requested.'
+                receipt = await self._network(effect,lambda: self.client.send_message(self.production_room_id,
+                    option['summary']+suffix))
+            with self.ledger.transaction():
+                self.ledger.set_meta(key,receipt.model_dump() if hasattr(receipt,'model_dump') else receipt)
+
     async def _dispatch(self, effect: dict) -> Any:
         kind, p = effect['kind'], effect['payload']
         if kind == 'hold':
             with self.ledger.transaction():
-                for room in self.crew_room_ids:
+                for room in self.crew_room_ids or [self.production_room_id]:
                     self._enqueue('hold_message', dict(**p, room_id=room), f"{effect['key']}:{room}", effect)
                 self.ledger.effect_status(effect['id'], 'sent')
         elif kind in ('hold_message', 'publication_text', 'message'):
@@ -246,6 +260,7 @@ class Dispatcher:
         elif kind == 'document':
             await self._document(effect)
         elif kind == 'open_question':
+            await self._present_options(effect)
             payload = QuestionPayload.model_validate(p['payload'])
             await self._network(effect, lambda: self.client.open_question(payload))
         elif kind in ('close_question', 'mark_delivered'):
@@ -287,7 +302,7 @@ class Dispatcher:
             effect = self.ledger.effect(effect_id)
             if effect and effect['status'] == 'sent':
                 await self._publication(effect, 'sent')
-        safe = ('hold', 'release', 'preview', 'document', 'open_question', 'close_question', 'mark_delivered')
+        safe = ('hold', 'release', 'preview', 'document', 'close_question', 'mark_delivered')
         for effect in self.ledger.effects('uncertain'):
             if effect['kind'] in safe and effect['attempts'] < 2:
                 self.ledger.effect_status(effect['id'], 'pending')
@@ -337,12 +352,17 @@ class Dispatcher:
                         raise
                     except Exception as error:
                         transient = isinstance(error, (httpx.TransportError, TimeoutError, ConnectionError))
-                        if safe and transient and attempt == 0 and effect['attempts'] < 1 and self.enabled() and self.loop.effect_current(effect):
+                        if safe and transient and attempt == 0 and effect['attempts'] < 1 and not self.ledger.get_meta('presentation_uncertain:'+effect['id']) and self.enabled() and self.loop.effect_current(effect):
                             await asyncio.sleep(self.retry_delay)
                             continue
                         status = 'uncertain' if transient else 'failed'
-                        self.ledger.effect_status(effect['id'], status, error=type(error).__name__)
-                        self._notice(f"{effect['kind']} {status}; review before retrying.",
+                        code=getattr(error,'http_status',None)
+                        diagnostic=type(error).__name__+(f' HTTP {code}' if code else '')
+                        if isinstance(error,SwitchError):
+                            diagnostic+=': '+str(error)[:160]
+                        destination=effect['payload'].get('room_id') or self.production_room_id
+                        self.ledger.effect_status(effect['id'], status, error=diagnostic)
+                        self._notice(f"{effect['kind']} {status} ({diagnostic}, room {destination}); review before retrying.",
                             effect['payload'].get('release_id') or effect['payload'].get('job_id'),
                             broadcast=effect['kind'] != 'message')
                         await self._publication(effect, status)

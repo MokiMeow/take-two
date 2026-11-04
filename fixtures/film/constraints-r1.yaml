@@ -39,6 +39,7 @@ locations:
     windows: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
     light_until: '2026-11-06T18:20:00+05:30'
 travel_min:
+  courtyard->rooftop: 15
   rooftop->stairwell: 15
   stairwell->rooftop: 15
   stairwell->courtyard: 0

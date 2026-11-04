@@ -32,6 +32,10 @@ from coordinator.switch_models import (
 class SwitchError(RuntimeError):
     """A server refusal or invalid protocol response; credentials are omitted."""
 
+    def __init__(self, message: str, *, http_status: int | None=None) -> None:
+        super().__init__(message)
+        self.http_status=http_status
+
 
 class TakenOver(SwitchError):
     """Terminal: another process owns this connection. Do not reconnect."""
@@ -77,6 +81,29 @@ class SwitchClient:
         self.reconnect_delay = reconnect_delay
         self._reader: asyncio.Task[None] | None = None
         self._taken_over = False
+        self.on_transport_lost: Callable[[],None] = lambda: None
+
+    async def head_position(self) -> dict[str,int]:
+        """Read the authoritative own-event head without claiming any room.
+
+        Source: Switch protocol/stream.py connection_state and Console's
+        event-stream.ts positions; this short probe has its own connection UUID.
+        """
+        parts = urlsplit(self.base_url)
+        params = dict(connection_id=str(uuid4()),scope='all',filter='addressed',start_at='head',protocol='9',protocol_accepts='9')
+        url = urlunsplit(('wss' if parts.scheme=='https' else 'ws',parts.netloc,
+            parts.path+self._agent_path+'/connection/ws',urlencode(params),''))
+        async with self._connect(url,additional_headers=self._headers,open_timeout=15,max_size=2**20) as socket:
+            frame = SwitchFrame.model_validate_json(await asyncio.wait_for(socket.recv(),15))
+            if frame.event!='connection_state':
+                raise SwitchError('Catch-up head probe was refused')
+            return Identity.model_validate(dict(agent_id='probe',api_key='unused',position=frame.data['position'])).position
+
+    async def member_rooms(self) -> list[dict[str,Any]]:
+        return await self.operation('list_rooms')
+
+    async def read_context(self, room_id: str, since: str) -> dict[str,Any]:
+        return await self.operation('read_context',dict(room_id=room_id,since=since,limit=1000))
 
     @property
     def identity(self) -> Identity:
@@ -128,7 +155,7 @@ class SwitchClient:
     @staticmethod
     def _check(response: httpx.Response) -> None:
         if response.is_error:
-            raise SwitchError(f"Switch request refused (HTTP {response.status_code})")
+            raise SwitchError(f"Switch request refused (HTTP {response.status_code})",http_status=response.status_code)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         if self._taken_over:
@@ -338,6 +365,9 @@ class SwitchClient:
                             if code == "taken_over":
                                 self._taken_over = True
                                 raise TakenOver("Switch connection was taken over; coordinator stopped")
+                            if frame.event=='evicted' and code=='heartbeat_lapsed':
+                                self.on_transport_lost()
+                                raise OSError('Switch heartbeat lapsed; bounded reconnect required')
                             if frame.event == "refused":
                                 status = frame.data.get("status")
                                 if isinstance(status, int) and (status == 429 or status >= 500):
@@ -349,6 +379,7 @@ class SwitchClient:
                             queue.put_nowait(frame)
                     raise OSError("Switch stream closed")
                 except (OSError, ConnectionClosed) as exc:
+                    self.on_transport_lost()
                     if attempts >= self.max_reconnects:
                         raise ConnectionError("Switch reconnect limit reached") from exc
                     await asyncio.sleep(min(self.reconnect_delay * 2**attempts, 15))
@@ -356,6 +387,7 @@ class SwitchClient:
         except asyncio.CancelledError:
             raise
         except BaseException as exc:
+            self.on_transport_lost()
             await queue.put(exc)
 
     async def events(self) -> AsyncIterator[SwitchFrame]:

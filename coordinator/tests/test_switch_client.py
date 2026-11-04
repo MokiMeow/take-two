@@ -325,3 +325,27 @@ def test_transient_open_refusals_reconnect_with_a_bound(tmp_path):
         assert len(calls) == 2
         await c.aclose()
     asyncio.run(scenario())
+
+
+async def test_heartbeat_lapse_pauses_before_reconnect_without_terminal_frame(tmp_path) -> None:
+    sockets=[FakeSocket([dict(event='connection_state',data=dict(position={'s':4})),
+        dict(event='evicted',data=dict(code='heartbeat_lapsed'))]),
+        FakeSocket([dict(event='connection_state',data=dict(position={'s':4})),
+            dict(event='message',data=dict(position={'s':5},payload=dict(body='caught up')))])]
+    opened=[]
+    def connect(*args,**kwargs):
+        opened.append(True)
+        return sockets.pop(0)
+    c=client(tmp_path,lambda _:httpx.Response(200),websocket_connect=connect,max_reconnects=1,reconnect_delay=0)
+    paused=[]
+    c.on_transport_lost=lambda:paused.append(True)
+    seen=[]
+    try:
+        async for frame in c.events():
+            seen.append(frame.event)
+            assert frame.event!='evicted'
+            if frame.event=='message':
+                break
+        assert len(opened)==2 and paused
+    finally:
+        await c.aclose()

@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import json
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from coordinator.constraints import Manifest, Constraints
 from coordinator.ui_models import ChangeCommand
 from coordinator.checker import CheckResult, check_manifest
@@ -16,23 +16,36 @@ IST = ZoneInfo('Asia/Kolkata')
 Identifier = Annotated[str, Field(min_length=1, max_length=200)]
 
 class Reply(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='forbid',str_max_length=2000)
     job_id: Identifier
     script_rev: int = Field(strict=True, ge=1)
     constraints_rev: int = Field(strict=True, ge=1)
     addressed_to: str | None = None
 
 class SupervisorReply(Reply):
-    must_keep: list[Identifier] = Field(min_length=1, max_length=100)
-    preferences: list[Identifier] = Field(default_factory=list, max_length=100)
-    summary: str = ''
+    must_keep: list[Identifier] = Field(min_length=1, max_length=10)
+    preferences: list[Identifier] = Field(default_factory=list, max_length=40)
+    summary: str = Field(default='',max_length=1000)
 
 class Proposal(BaseModel):
     model_config = ConfigDict(extra='forbid')
     candidate_id: Identifier
-    label: Identifier
-    story_cost: str = Field(max_length=2000)
-    manifest: Manifest
+    label: str = Field(min_length=1, max_length=80)
+    story_cost: str = Field(max_length=400)
+    manifest: Manifest | None = None
+    manifests: list[Manifest] | None = Field(default=None, min_length=1, max_length=20)
+
+    @model_validator(mode='after')
+    def one_schedule(self) -> 'Proposal':
+        if (self.manifest is None) == (self.manifests is None):
+            raise ValueError('Provide manifest or manifests, exclusively')
+        rows = self.plans()
+        if len({m.scene_id for m in rows})!=len(rows):
+            raise ValueError('Duplicate schedule scene')
+        return self
+
+    def plans(self) -> list[Manifest]:
+        return self.manifests if self.manifests is not None else [self.manifest]
 
 class ADReply(Reply):
     candidates: list[Proposal] = Field(min_length=1, max_length=3)
@@ -41,6 +54,10 @@ class ADReply(Reply):
 def visible_candidate(item: dict[str, Any]) -> dict[str, Any]:
     """Project a checked, revision-bound manifest into the stable UI contract."""
     result = deepcopy(item)
+    if result.get('manifests'):
+        result['schedule']=[visible_candidate(dict(manifest=m))['manifest'] for m in result['manifests']]
+    for key in ('manifests','letter','presentation','presentation_receipt'):
+        result.pop(key,None)
     result['manifest'] = {k:v for k,v in result['manifest'].items() if k in
         ('scene_id','location','start','end','setup_min','wrap_min','people','shots','capabilities')}
     for key in ('start','end'):
@@ -66,7 +83,7 @@ def check_candidate(manifest: Manifest, constraints: Constraints, state: dict[st
     facts = constraints.model_dump(mode='json')
     for scene in state['scenes']:
         plan = scene.get('plan')
-        if scene['id'] == manifest.scene_id or not plan:
+        if scene['id'] == manifest.scene_id or not plan or scene.get('validity')!='valid':
             continue
         start = datetime.fromisoformat(plan['start']) - timedelta(minutes=plan['setup_min'])
         end = datetime.fromisoformat(plan['end']) + timedelta(minutes=plan['wrap_min'])
@@ -131,7 +148,7 @@ def apply_change(command: ChangeCommand, constraints: Constraints, authorities: 
         role = 'location_permission'
     elif command.entity == 'person' and field in ('hard_stop','available'):
         role = 'availability_confirmation'
-    elif command.entity in ('scene','capability'):
+    elif command.entity=='scene' and field in ('hard','preferences','verified_facts') or command.entity=='capability':
         role = 'creative' if command.entity == 'scene' else 'capability_verification'
     else:
         return 'rejected', 'Unsupported change field', None

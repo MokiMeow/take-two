@@ -18,7 +18,8 @@ dependencies = [
 dev = ["pytest==8.4.2", "pytest-asyncio==1.2.0"]
 
 [tool.pytest.ini_options]
+cache_dir = "data/pytest-cache"
 testpaths = ["coordinator/tests"]
-addopts = "--basetemp=data/pytest-tmp"
+addopts = "--basetemp=data/pytest-w4-default"
 asyncio_mode = "auto"
 pythonpath = ["."]

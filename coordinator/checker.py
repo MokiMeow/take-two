@@ -103,6 +103,10 @@ def check_manifest(manifest: Manifest, constraints: Constraints) -> CheckResult:
     if scene is None:
         unknowns.append(f"Scene {manifest.scene_id}'s hard story rules need verification.")
     else:
+        for person in sorted(set(scene.required_people)-set(manifest.people)):
+            failures.append(f'Required cast/crew {person} is missing from the manifest.')
+        for capability in sorted(set(scene.required_capabilities)-set(manifest.capabilities)):
+            failures.append(f'Required capability {capability} is missing from the manifest.')
         verified = scene.verified_facts.get(manifest.location, {})
         for rule in scene.hard:
             status_check(verified.get(rule, "unknown"), f"Hard story rule '{rule}'")
@@ -135,4 +139,5 @@ def check_manifest(manifest: Manifest, constraints: Constraints) -> CheckResult:
     result: Literal["pass", "fail", "needs_verification"] = (
         "fail" if failures else "needs_verification" if unknowns else "pass"
     )
-    return CheckResult(result=result, reasons=failures + unknowns)
+    reasons = failures + unknowns
+    return CheckResult(result=result, reasons=reasons[:99]+(['Further check reasons omitted.'] if len(reasons)>99 else []))

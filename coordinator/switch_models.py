@@ -159,3 +159,22 @@ class ApprovalOutcome(BaseModel):
     answered_at: datetime | None = None
     expires_at: datetime | None = None
     delivered_at: datetime | None = None
+
+
+class HistoryEntry(BaseModel):
+    id: str = Field(max_length=512)
+    kind: str
+    sender: str = Field(max_length=512)
+    sender_name: str = Field(default='',max_length=512)
+    body: str | None = Field(default=None,max_length=65536)
+    timestamp: int | None = None
+
+
+class HistoryThread(BaseModel):
+    root: HistoryEntry
+    replies: list[HistoryEntry] = Field(default_factory=list,max_length=1000)
+
+
+class RoomContext(BaseModel):
+    threads: list[HistoryThread] = Field(max_length=1000)
+    truncated: bool

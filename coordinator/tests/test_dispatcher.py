@@ -34,13 +34,13 @@ class Renderer:
         self.placeholder = placeholder
         self.callback = callback
 
-    async def render(self, kind, manifest):
+    async def render(self, kind, manifest, props):
         self.last_manifest = manifest
         if self.callback:
             self.callback()
         path = self.artifacts_dir / ('call.placeholder.txt' if self.placeholder else 'call.png')
         path.write_bytes(b'placeholder' if self.placeholder else b'\x89PNG\r\n\x1a\nimage')
-        return SimpleNamespace(path=path, placeholder=self.placeholder, manifest_hash='sha256:approved')
+        return SimpleNamespace(path=path, placeholder=self.placeholder, manifest_hash=__import__('coordinator.schedules',fromlist=['digest']).digest(manifest))
 
 
 async def setup(tmp_path, handler, **kwargs):
@@ -61,6 +61,12 @@ async def setup(tmp_path, handler, **kwargs):
 
 
 def queue(ledger, kind, payload):
+    if kind=='release':
+        from coordinator.tests.w4_support import release_payload
+        payload=release_payload(payload)
+    if kind=='preview':
+        from coordinator.tests.w4_support import preview_payload
+        payload=preview_payload(payload)
     with ledger.transaction():
         return ledger.enqueue(kind, payload, 'test:' + kind, 2)
 
@@ -103,7 +109,7 @@ async def test_render_completion_rechecks_revision_before_any_publication(tmp_pa
         lambda request: calls.append(request) or httpx.Response(200, json={'ok': True}))
     dispatcher.renderer.callback = lambda: setattr(production, 'current', False)
     queue(ledger, 'release', dict(release_id='r2', manifest={'scenes': []},
-        manifest_hash='sha256:approved', summary='Current plan', preview_url=None))
+        manifest_hash=('sha256:'+'a'*64), summary='Current plan', preview_url=None))
     await dispatcher.run_once()
     assert calls == []
     assert len(ledger.effects('cancelled')) == 1
@@ -116,7 +122,7 @@ async def test_placeholder_is_visible_text_fallback_and_never_uploaded(tmp_path)
     ledger, production, client, dispatcher = await setup(tmp_path,
         lambda request: requests.append(request) or httpx.Response(200, json={'ok': True, 'event_id': 'm1'}), placeholder=True)
     queue(ledger, 'release', dict(release_id='r2', manifest={'scenes': []},
-        manifest_hash='sha256:approved', summary='New plan', preview_url=None))
+        manifest_hash=('sha256:'+'a'*64), summary='New plan', preview_url=None))
     for _ in range(3):
         await dispatcher.run_once()
     assert not any(request.url.path.endswith('/media') for request in requests)
@@ -137,7 +143,7 @@ async def test_release_uploads_call_sheet_before_text_with_durable_file_checkpoi
         return httpx.Response(200, json={'ok': True})
     ledger, production, client, dispatcher = await setup(tmp_path, handler)
     queue(ledger, 'release', dict(release_id='r2', manifest={'scenes': []},
-        manifest_hash='sha256:approved', summary='New plan', preview_url=None))
+        manifest_hash=('sha256:'+'a'*64), summary='New plan', preview_url=None))
     for _ in range(4):
         await dispatcher.run_once()
     assert [request.url.path.rsplit('/', 1)[-1] for request in requests] == ['media', 'message', 'message']
@@ -195,12 +201,12 @@ async def test_restart_can_retry_local_render_without_replaying_external_posts(t
         lambda request: httpx.Response(200, json={'ok': True, 'event_id': 'm1'}), placeholder=True)
     effect_id = queue(ledger, 'release', dict(release_id='r2', manifest={'scene_id': 's3'},
         snapshot={'scenes': [{'scene_id': 's1', 'location': 'street'}]},
-        manifest_hash='sha256:approved', summary='New plan', preview_url=None))
+        manifest_hash=('sha256:'+'a'*64), summary='New plan', preview_url=None))
     ledger.effect_status(effect_id, 'sending')
     ledger.close()
     dispatcher.ledger = Ledger(tmp_path / 'ledger.sqlite')
     await dispatcher.run_once()
-    assert dispatcher.renderer.last_manifest == {'scenes': [{'scene_id': 's1', 'location': 'street'}]}
+    assert len(dispatcher.renderer.last_manifest['scenes'])==3
     assert ('r2', 'crew', 'sent') in production.results
     await client.aclose()
 
@@ -210,11 +216,11 @@ async def test_preview_placeholder_completes_as_visible_failure(tmp_path):
     requests = []
     ledger, production, client, dispatcher = await setup(tmp_path,
         lambda request: requests.append(request) or httpx.Response(200), placeholder=True)
-    queue(ledger, 'preview', dict(candidate_id='stairs', manifest={}, manifest_hash='sha256:approved'))
+    queue(ledger, 'preview', dict(candidate_id='stairs', manifest={}, manifest_hash=('sha256:'+'a'*64)))
     await dispatcher.run_once()
     assert len(requests) == 1
     assert json.loads(requests[0].content)['room_id'] == 'production'
-    assert production.previews == [('stairs', 'sha256:approved', None, 'failed')]
+    assert production.previews == [('stairs', ('sha256:'+'a'*64), None, 'failed')]
     await client.aclose()
 
 
@@ -222,14 +228,14 @@ async def test_preview_placeholder_completes_as_visible_failure(tmp_path):
 async def test_new_revision_cancels_slow_render_so_holds_are_not_delayed(tmp_path):
     ledger, production, client, dispatcher = await setup(tmp_path, lambda request: httpx.Response(200))
     started, cancelled = asyncio.Event(), asyncio.Event()
-    async def slow_render(kind, manifest):
+    async def slow_render(kind, manifest, props):
         started.set()
         try:
             await asyncio.Event().wait()
         finally:
             cancelled.set()
     dispatcher.renderer.render = slow_render
-    queue(ledger, 'preview', dict(candidate_id='stairs', manifest={}, manifest_hash='sha256:approved'))
+    queue(ledger, 'preview', dict(candidate_id='stairs', manifest={}, manifest_hash=('sha256:'+'a'*64)))
     task = asyncio.create_task(dispatcher.run_once())
     await started.wait()
     production.current = False
@@ -264,7 +270,7 @@ async def test_traversal_preview_is_reported_and_external_file_is_never_uploaded
     dispatcher.renderer.artifacts_dir.mkdir()
     (tmp_path / 'outside.mp4').write_bytes(b'\x00\x00\x00\x18ftypisomoutside-private-bytes')
     queue(ledger, 'release', dict(release_id='r2', manifest={'scenes': []},
-        manifest_hash='sha256:approved', summary='New plan', preview_url='/media/../outside.mp4'))
+        manifest_hash=('sha256:'+'a'*64), summary='New plan', preview_url='/media/../outside.mp4'))
     await dispatcher.run_once()
     assert len([request for request in requests if request.url.path.endswith('/media')]) == 1
     assert all(b'outside-private-bytes' not in request.content for request in requests)
@@ -451,9 +457,10 @@ async def test_release_without_destinations_fails_visibly_instead_of_marking_sen
 
 
 def test_text_snapshot_includes_held_scene_without_stale_location_instructions():
-    text = Dispatcher._release_text(dict(release_id='r2', summary='Stairwell plan', snapshot=dict(scenes=[
-        dict(scene_id='s1', validity='held', hold_reason='Permission refused', location='rooftop'),
-        dict(scene_id='s3', location='stairwell', start='16:00', end='17:00', people=['maya'])])))
-    assert 's1: ON HOLD' in text and 'Permission refused' in text
+    from coordinator.tests.w4_support import release_payload
+    payload=release_payload(dict(release_id='r2'))
+    payload['envelope']['manifest']['scenes'][0]=dict(scene_id='s1',validity='held',hold_reason='Permission refused')
+    text=Dispatcher._release_text(payload)
+    assert 'The missed call · ON HOLD' in text and 'Permission refused' in text
     assert 'rooftop' not in text
-    assert 's3: stairwell' in text
+    assert 'The confession' in text and '16:30' in text

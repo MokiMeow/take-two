@@ -29,7 +29,7 @@ VerifiedRules = Annotated[dict[Identifier, FactStatus], Field(max_length=100)]
 
 
 class InputModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_max_length=2000, validate_assignment=True)
+    model_config = ConfigDict(extra="forbid", str_max_length=2000, str_strip_whitespace=True, validate_assignment=True)
 
 
 class TimeWindow(InputModel):
@@ -74,8 +74,10 @@ class Location(InputModel):
 
 class Scene(InputModel):
     id: Identifier
-    hard: list[Identifier] = Field(default_factory=list, max_length=100)
-    preferences: list[Identifier] = Field(default_factory=list, max_length=100)
+    hard: list[Identifier] = Field(default_factory=list, max_length=40)
+    preferences: list[Identifier] = Field(default_factory=list, max_length=40)
+    required_people: list[Identifier] = Field(default_factory=list, max_length=8)
+    required_capabilities: list[Identifier] = Field(default_factory=list, max_length=30)
     verified_facts: dict[Identifier, VerifiedRules] = Field(default_factory=dict, max_length=100)
 
 
@@ -90,11 +92,11 @@ class Constraints(InputModel):
     timezone: Identifier
     script_rev: int = Field(default=1, ge=1, strict=True)
     constraints_rev: int = Field(default=1, ge=1, strict=True)
-    people: list[Person] = Field(default_factory=list, max_length=200)
-    locations: list[Location] = Field(default_factory=list, max_length=200)
+    people: list[Person] = Field(default_factory=list, max_length=30)
+    locations: list[Location] = Field(default_factory=list, max_length=8)
     travel_min: dict[Identifier, Minutes] = Field(default_factory=dict, max_length=1000)
     capabilities: dict[Identifier, FactStatus] = Field(default_factory=dict, max_length=200)
-    scenes: list[Scene] = Field(default_factory=list, max_length=200)
+    scenes: list[Scene] = Field(default_factory=list, max_length=20)
     commitments: list[Commitment] = Field(default_factory=list, max_length=1000)
 
     @field_validator("timezone")
@@ -116,15 +118,15 @@ class Constraints(InputModel):
 
 
 class Manifest(InputModel):
-    scene_id: Identifier
-    location: Identifier
+    scene_id: Annotated[str, Field(min_length=1, max_length=64)]
+    location: Annotated[str, Field(min_length=1, max_length=40)]
     start: Timestamp
     end: Timestamp
     setup_min: Minutes
     wrap_min: Minutes
-    people: list[Identifier] = Field(min_length=1, max_length=200)
-    shots: list[Identifier] = Field(min_length=1, max_length=100)
-    capabilities: list[Identifier] = Field(default_factory=list, max_length=200)
+    people: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(min_length=1, max_length=8)
+    shots: list[Annotated[str, Field(min_length=1, max_length=30)]] = Field(min_length=1, max_length=6)
+    capabilities: list[Identifier] = Field(default_factory=list, max_length=30)
     script_rev: int = Field(ge=1, strict=True)
     constraints_rev: int = Field(ge=1, strict=True)
     requires_light: bool = False

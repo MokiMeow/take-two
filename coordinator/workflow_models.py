@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from coordinator.constraints import Manifest, Constraints
 from coordinator.ui_models import ChangeCommand
 from coordinator.checker import CheckResult, check_manifest
+from coordinator.change_values import normalize_change
 
 IST = ZoneInfo('Asia/Kolkata')
 
@@ -130,7 +131,8 @@ def note_constraints(constraints: Constraints, scene_ids: set[str], note: str) -
     return Constraints.model_validate(facts)
 
 
-def apply_change(command: ChangeCommand, constraints: Constraints, authorities: dict[str, list[str]], now: datetime) -> tuple[str, str | None, Constraints | None]:
+def apply_change(command: ChangeCommand, constraints: Constraints, authorities: dict[str, list[str]], now: datetime,
+                 plans: dict[str, dict[str, Any]] | None = None) -> tuple[str, str | None, Constraints | None]:
     """Return (status, reason, validated facts); no partial mutations."""
     facts = constraints.model_dump(mode='json')
     role = None
@@ -144,10 +146,12 @@ def apply_change(command: ChangeCommand, constraints: Constraints, authorities: 
             return 'pending_confirmation', 'Named safety clearance required', None
         facts['constraints_rev'] += 1
         return 'recorded', None, Constraints.model_validate(facts)
-    if command.entity == 'location' and field in ('permission','windows','light_until'):
+    if command.entity == 'location' and field in ('permission','window','windows','light_until'):
         role = 'location_permission'
-    elif command.entity == 'person' and field in ('hard_stop','available'):
+    elif command.entity == 'person' and field in ('hard_stop','available','late_by'):
         role = 'availability_confirmation'
+    elif command.entity == 'scene' and field in ('overrun','status'):
+        role = 'overrun_confirmation'
     elif command.entity=='scene' and field in ('hard','preferences','verified_facts') or command.entity=='capability':
         role = 'creative' if command.entity == 'scene' else 'capability_verification'
     else:
@@ -175,6 +179,9 @@ def apply_change(command: ChangeCommand, constraints: Constraints, authorities: 
         day = datetime.fromisoformat(prior).astimezone(IST).date().isoformat()
         value = f"{day}T{value}+05:30"
     try:
+        field, normalized = normalize_change(command,constraints,plans or {})
+        if command.field not in ('hard_stop','light_until'):
+            value = normalized
         if command.entity == 'capability':
             if field != 'status':
                 return 'rejected','Capability field must be status',None
@@ -184,15 +191,16 @@ def apply_change(command: ChangeCommand, constraints: Constraints, authorities: 
             target = next((x for x in facts[collection] if x['id']==command.target),None)
             if target is None:
                 return 'rejected','Unknown change target',None
-            if field in ('available','windows','hard','preferences','verified_facts'):
-                value = json.loads(value)
-            target[field] = value
+            if field == 'overrun':
+                target.update(value)
+            else:
+                target[field] = value
             if field == 'permission':
                 # The checker records the named authority; changes retain the
                 # exact authenticated Switch reporter identity separately.
                 target['permission_confirmed_by'] = target.get('permission_authority')
         facts['constraints_rev'] += 1
         return 'recorded',None,Constraints.model_validate(facts)
-    except (ValidationError,ValueError,TypeError):
+    except (ValidationError,ValueError,TypeError,StopIteration,OverflowError):
         return 'rejected','Invalid value for structured change',None
 

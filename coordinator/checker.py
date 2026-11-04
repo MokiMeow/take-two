@@ -90,7 +90,7 @@ def check_manifest(manifest: Manifest, constraints: Constraints) -> CheckResult:
               and location.permission_confirmed_by != location.permission_authority):
             failures.append(f"Location {location.id} permission was not confirmed by its named authority.")
         window_check(location.windows, f"Location {location.id}'s permission window")
-        if manifest.requires_light:
+        if location.exterior or manifest.requires_light:
             if location.light_until is None:
                 unknowns.append(f"Location {location.id}'s light deadline needs verification.")
             elif manifest.end > location.light_until:
@@ -103,10 +103,17 @@ def check_manifest(manifest: Manifest, constraints: Constraints) -> CheckResult:
     if scene is None:
         unknowns.append(f"Scene {manifest.scene_id}'s hard story rules need verification.")
     else:
+        if scene.status == 'held':
+            failures.append(f'Scene {scene.id} is held by its recorded status.')
+        if scene.overrun:
+            if manifest.start != scene.overrun_start or manifest.end < scene.overrun_end + timedelta(minutes=scene.overrun):
+                failures.append(f'Scene {scene.id} must retain its observed start and include its {scene.overrun} minute overrun.')
         for person in sorted(set(scene.required_people)-set(manifest.people)):
             failures.append(f'Required cast/crew {person} is missing from the manifest.')
         for capability in sorted(set(scene.required_capabilities)-set(manifest.capabilities)):
-            failures.append(f'Required capability {capability} is missing from the manifest.')
+            alternatives = scene.capability_alternatives.get(capability, [])
+            if not any(set(row) <= set(manifest.capabilities) for row in alternatives):
+                failures.append(f'Required capability {capability} is missing from the manifest (no reviewed replacement).')
         verified = scene.verified_facts.get(manifest.location, {})
         for rule in scene.hard:
             status_check(verified.get(rule, "unknown"), f"Hard story rule '{rule}'")

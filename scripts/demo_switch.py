@@ -69,7 +69,7 @@ class Mattermost:
         if not people and old_cache.exists():
             people={k:Login.model_validate(v) for k,v in __import__('json').loads(old_cache.read_text(encoding='utf-8')).items()}
             self._save_people(cache,people)
-            old_cache.unlink()  # This rehearsal created this exact file; never touch other identities.
+            # Preserve the legacy file: this run did not create it.
         for role in ('director','producer','ad-human','maya','dev','leela'):
             login=people.get(role) or Login(username='w4-'+role,password=secrets.token_urlsafe(24))
             if role not in people:
@@ -149,9 +149,9 @@ async def wait_for(read: Callable, *, timeout: float=180, label: str='state') ->
     raise TimeoutError('Timed out waiting for '+label)
 
 
-async def identity(name: str) -> SwitchClient:
+async def identity(name: str, directory: Path = DIRECTORY) -> SwitchClient:
     settings=Settings()
-    path=DIRECTORY/(name+'.json')
+    path=directory/(name+'.json')
     client=SwitchClient(settings.switch_api_url,path)
     if not path.exists():
         response=RegistrationResponse.model_validate(await client._exchange('POST','/agents',

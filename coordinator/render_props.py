@@ -29,7 +29,7 @@ def call_times(manifest: dict[str, Any]) -> dict[str, str]:
     for scene in manifest['scenes']:
         if scene.get('validity') in ('held','invalid'):
             continue
-        time = (datetime.fromisoformat(scene['start'])-timedelta(minutes=scene['setup_min'])).isoformat()
+        time = (datetime.fromisoformat(scene['start'])-timedelta(minutes=scene['setup_min'])).astimezone(ZoneInfo('Asia/Kolkata')).isoformat()
         for person in scene['people']:
             if person not in result or datetime.fromisoformat(time)<datetime.fromisoformat(result[person]):
                 result[person] = time
@@ -56,13 +56,8 @@ def callsheet_props(envelope: dict[str, Any]) -> dict[str, Any]:
                 locations.append(m['location'])
         scenes.append(row)
     times, old_times = call_times(envelope['manifest']), call_times(previous)
-    changed_people = set()
-    for m in envelope['manifest']['scenes']:
-        prior = old.get(m['scene_id'],{})
-        if operational(m)!=operational(prior):
-            changed_people.update(m.get('people',[])+prior.get('people',[]))
     crew = [dict(name=p['name'],role=f"Actor ({actors[p['id']]})" if p['id'] in actors else p['role'].replace('_',' / ').title(),
-        call_time=times.get(p['id']),changed=p['id'] in changed_people or times.get(p['id'])!=old_times.get(p['id'])) for p in metadata['crew']]
+        call_time=times.get(p['id']),changed=times.get(p['id'])!=old_times.get(p['id'])) for p in metadata['crew']]
     return CallSheetProps.model_validate(dict(production=metadata['production'],release=envelope['release'],
         general_call=min(times.values(),key=datetime.fromisoformat) if times else envelope['release']['created_at'],
         sunset=metadata.get('sunset'),scenes=scenes,crew=crew,
@@ -81,6 +76,13 @@ def release_text(envelope: dict[str, Any]) -> str:
     colour = colours[(r['number']-1)%len(colours)].lower()
     lines = [f"TAKE TWO · Release {r['number']} ({colour} pages) · {prod['title']}, {prod['day']}",
         'What changed: '+r['summary']]
+    old = {m['scene_id']:m for m in (envelope.get('previous_manifest') or {'scenes':[]})['scenes']}
+    old_times = call_times(envelope.get('previous_manifest') or {'scenes':[]})
+    for m in envelope['manifest']['scenes']:
+        prior = old.get(m['scene_id'])
+        if prior and 'start' in prior and 'start' in m and (m['start'],m['end'])!=(prior['start'],prior['end']):
+            number = next(s['number'] for s in envelope['metadata']['scenes'] if s['id']==m['scene_id'])
+            lines.append(f"Scene {number} moved: {hhmm(prior['start'])}–{hhmm(prior['end'])} → {hhmm(m['start'])}–{hhmm(m['end'])}.")
     for s in props['scenes']:
         mark = '*' if s['changed'] else ''
         if s['status']=='held':
@@ -89,6 +91,12 @@ def release_text(envelope: dict[str, Any]) -> str:
             location = ('INT. ' if s['location']=='stairwell' else 'EXT. ')+s['location'].upper()
             lines.append(f"Sc {s['number']}{mark} · {s['title']} · {location} · {hhmm(s['start'])}–{hhmm(s['end'])}")
     lines.append('Call times: '+' · '.join(f"{p['name']} {hhmm(p['call_time']) if p['call_time'] else 'held'}" for p in props['crew'])+'   (* = changed)')
+    changed_calls=[]
+    for p,member in zip(props['crew'],envelope['metadata']['crew'],strict=True):
+        if p['changed']:
+            prior=old_times.get(member['id'])
+            changed_calls.append(f"{p['name']} {hhmm(prior) if prior else 'none'} → {hhmm(p['call_time']) if p['call_time'] else 'held'}")
+    lines.append('Re-confirm changed calls: '+('; '.join(changed_calls) or 'none; existing confirmations carry forward')+'.')
     for scene in envelope['manifest']['scenes']:
         if 'shots' in scene:
             number = next(s['number'] for s in envelope['metadata']['scenes'] if s['id']==scene['scene_id'])

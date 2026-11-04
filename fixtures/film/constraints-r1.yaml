@@ -16,12 +16,14 @@ people:
     hard_stop: '2026-11-06T20:00:00+05:30'
 locations:
   - id: rooftop
+    exterior: true
     permission: confirmed
     permission_authority: producer
     permission_confirmed_by: producer
     windows: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
     light_until: '2026-11-06T18:20:00+05:30'
   - id: courtyard
+    exterior: true
     permission: confirmed
     permission_authority: producer
     permission_confirmed_by: producer
@@ -33,6 +35,7 @@ locations:
     permission_confirmed_by: producer
     windows: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
   - id: park
+    exterior: true
     permission: confirmed
     permission_authority: producer
     permission_confirmed_by: producer
@@ -52,18 +55,22 @@ capabilities:
   sound_recorder: confirmed
   gimbal: confirmed
   second_camera: unknown
+  lav: confirmed
 scenes:
   - id: s1
+    capability_alternatives: {sound_recorder: [[lav]]}
     hard: [Dev receives the message]
     preferences: [quiet opening]
     verified_facts:
       stairwell: {Dev receives the message: confirmed}
   - id: s2
+    capability_alternatives: {sound_recorder: [[lav]]}
     hard: [Maya agrees to meet Dev]
     preferences: [natural light]
     verified_facts:
       courtyard: {Maya agrees to meet Dev: confirmed}
   - id: s3
+    capability_alternatives: {sound_recorder: [[lav]]}
     hard: [confession is intelligible and confidential in the story]
     preferences: [visually secluded, sunset]
     verified_facts:

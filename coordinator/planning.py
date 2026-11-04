@@ -5,6 +5,7 @@ from typing import Any
 from coordinator.constraints import Manifest
 from coordinator.checker import check_manifest
 from coordinator.workflow_models import workflow_transaction
+from coordinator.ripple import ripple_holds
 
 
 class PlanningTransitions:
@@ -28,6 +29,7 @@ class PlanningTransitions:
 
     def _affected(self, command: Any, state: dict[str, Any]) -> list[str]:
         unresolved = set(self.workflow.get('unresolved',[]))
+        unresolved.update(ripple_holds(self.workflow.get('plans',{}),self.constraints))
         for scene in state['scenes']:
             sid = scene['id']
             if command.entity=='scene' and command.target==sid:

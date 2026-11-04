@@ -129,7 +129,8 @@ class Loop(ReleaseTransitions, PlanningTransitions):
             if prior:
                 return ChangeResponse.model_validate(prior)
             state = self._state()
-            status,reason,facts = apply_change(command,self.constraints,self.authorities if authenticated else {},self._now())
+            status,reason,facts = apply_change(command,self.constraints,self.authorities if authenticated else {},self._now(),
+                plans=self.workflow.get('plans',{}))
             change_id = str(uuid4())
             response = ChangeResponse(change_id=change_id,status=status,reason=reason)
             with workflow_transaction(self):
@@ -151,18 +152,22 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                     constraints_rev=self.constraints.constraints_rev if status=='recorded' else None))
                 label = person_label(command.reporter,self.identity_names,self.identity_roles)
                 self._event(state,'change',f'{label}: {command.target} {command.field} {command.value} ({status}).',change_id)
-                affected = self._affected(command,state)
+                affected = self._affected(command,state) if facts is not None or status=='recorded' else list(self.workflow.get('unresolved',[]))
                 if status == 'recorded':
                     self._hold(state,affected,f'{command.target} {command.field} {command.value}',change_id)
                     state['jobs'] = []
                     if affected:
-                        eligible = [sid for sid in affected if sid not in self.workflow['holds']]
+                        eligible = [sid for sid in affected if sid not in self.workflow['holds'] and
+                            next(s for s in self.constraints.scenes if s.id==sid).status != 'held']
                         if eligible:
-                            self._job(state,'script-supervisor',dict(change=command.model_dump(),scene_ids=eligible))
+                            self._job(state,'script-supervisor',dict(change=command.model_dump(),scene_ids=eligible,
+                                current_schedule=list(self.workflow.get('plans',{}).values())))
                         else:
                             self._queue('message',dict(body='Safety hold recorded. Named clearance is required before planning a replacement.'),f'safety-wait:{change_id}')
                 elif status == 'pending_confirmation' and command.value in ('refused','unknown'):
                     self._hold(state,affected,'Report requires confirmation',change_id)
+                if status != 'recorded':
+                    self._queue('message',dict(body=f'Change {status}: {reason or "authority confirmation required"}.'),f'change-result:{change_id}')
                 if key:
                     self.ledger.set_meta(f'change_source:{key}',response.model_dump())
                 self._save(state)
@@ -273,9 +278,10 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                 self._save(state)
                 return True
 
-    def _question(self, state: dict[str, Any], candidates: list[dict[str, Any]]) -> None:
+    def _question(self, state: dict[str, Any], candidates: list[dict[str, Any]], *,
+                  expires_at: str | None = None, reissues: int = 0) -> None:
         request_id, turn_id = str(uuid4()),str(uuid4())
-        expiry = self._stamp(self._now()+timedelta(seconds=self.question_ttl))
+        expiry = expires_at or self._stamp(self._now()+timedelta(seconds=self.question_ttl))
         allowed = list(self.authorities.get('creative',[]))
         options = [dict(id=c['candidate_id'],label=c['label'],description=c['story_cost']) for c in candidates if c['check']['result']=='pass']
         options.append(dict(id='neither',label='Neither',description='Add a note; no release.'))
@@ -289,7 +295,7 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                 options=[QuestionOption(**o) for o in options])]).model_dump(mode='json')
         question = dict(request_id=request_id,turn_id=turn_id,session_id=self.session_id,script_rev=self.constraints.script_rev,
             constraints_rev=self.constraints.constraints_rev,authorized_answerers=allowed,candidates=deepcopy(candidates),
-            expires_at=expiry,payload=payload,status='open',must_keep=self.workflow.get('supervisor',{}).get('must_keep',[]))
+            expires_at=expiry,payload=payload,status='open',reissues=reissues,must_keep=self.workflow.get('supervisor',{}).get('must_keep',[]))
         self.workflow['question'] = question
         state['decision'] = dict(request_id=request_id,status='open',question=prompt,authority=', '.join(allowed) or 'Unconfigured authority',
             authority_name=', '.join(person_name(i,self.identity_names) for i in allowed) or 'Unconfigured authority',
@@ -347,9 +353,13 @@ class Loop(ReleaseTransitions, PlanningTransitions):
                     q['status']='rejected_unauthorized'
                     self.ledger.put('questions',q['request_id'],q,q['status'],q['constraints_rev'])
                     state['decision']['status'] = 'rejected_unauthorized'
-                    self._event(state,'decision','Unauthorized answer recorded; replacement question issued.',request_id)
                     self.workflow['closed_questions'] = [*self.workflow['closed_questions'],request_id][-200:]
-                    self._question(state,q['candidates'])
+                    retry = q.get('reissues',0) < 1 and self._now() < datetime.fromisoformat(q['expires_at'])
+                    text = 'Unauthorized answer recorded; replacement question issued.' if retry else 'Unauthorized answer recorded; replacement limit reached. Plan remains held; contact the named director.'
+                    self._event(state,'decision',text,request_id)
+                    self._queue('message',dict(body=text),f'unauthorized:{request_id}')
+                    if retry:
+                        self._question(state,q['candidates'],expires_at=q['expires_at'],reissues=q.get('reissues',0)+1)
                     self._save(state)
                     return False
                 candidate_id = outcome.get('candidate_id')
@@ -402,7 +412,7 @@ class Loop(ReleaseTransitions, PlanningTransitions):
         async with self.lock:
             state = self._state()
             current = state['releases'][0] if state['releases'] else None
-            if not current or person not in {c['id'] for c in state['crew']} or current['release_id']!=release_id or current['status']!='published':
+            if not current or self.workflow.get('unresolved') or person not in {c['id'] for c in state['crew']} or current['release_id']!=release_id or current['status']!='published':
                 with workflow_transaction(self):
                     name = next((p['name'] for p in state['crew'] if p['id']==person),'Crew member')
                     self._event(state,'stale_reply',f'{name}: confirmation does not identify the current published release.',release_id)

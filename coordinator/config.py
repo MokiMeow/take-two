@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     take_two_ad_id: str = ''
     take_two_safety_id: str = ''
     take_two_capability_authority_id: str = ''
+    take_two_script_supervisor_id: str = ''
     take_two_supervisor_agent_id: str = ''
     take_two_ad_agent_id: str = ''
     take_two_supervisor_sender_id: str = ''

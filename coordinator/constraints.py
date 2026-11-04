@@ -65,6 +65,7 @@ class Person(InputModel):
 
 class Location(InputModel):
     id: Identifier
+    exterior: bool = False
     permission: FactStatus = "unknown"
     permission_authority: Identifier | None = None
     permission_confirmed_by: Identifier | None = None
@@ -78,7 +79,21 @@ class Scene(InputModel):
     preferences: list[Identifier] = Field(default_factory=list, max_length=40)
     required_people: list[Identifier] = Field(default_factory=list, max_length=8)
     required_capabilities: list[Identifier] = Field(default_factory=list, max_length=30)
+    capability_alternatives: dict[Identifier, list[list[Identifier]]] = Field(default_factory=dict, max_length=30)
+    status: Literal['scheduled', 'held'] = 'scheduled'
+    overrun: Minutes = 0
+    overrun_start: Timestamp | None = None
+    overrun_end: Timestamp | None = None
     verified_facts: dict[Identifier, VerifiedRules] = Field(default_factory=dict, max_length=100)
+
+    @model_validator(mode='after')
+    def bounded_alternatives_and_overrun(self) -> Scene:
+        for alternatives in self.capability_alternatives.values():
+            if not 1 <= len(alternatives) <= 5 or any(not 1 <= len(row) <= 5 for row in alternatives):
+                raise ValueError('At most five nonempty kit alternatives of five capabilities')
+        if self.overrun and (self.overrun_start is None or self.overrun_end is None or self.overrun_end <= self.overrun_start):
+            raise ValueError('Overrun requires the original observed scene interval')
+        return self
 
 
 class Commitment(TimeWindow):

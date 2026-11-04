@@ -133,7 +133,8 @@ class Runtime(Recovery, DayRooms):
             authorities={'creative': [settings.take_two_director_id] if settings.take_two_director_id else [],
                          'location_permission': [settings.take_two_producer_id] if settings.take_two_producer_id else [],
                          'safety': [settings.take_two_safety_id] if settings.take_two_safety_id else [],
-                         'capability_verification': [settings.take_two_capability_authority_id] if settings.take_two_capability_authority_id else [],
+                         'capability_verification': list(filter(None,[settings.take_two_ad_id, settings.take_two_capability_authority_id])),
+                         'overrun_confirmation': list(filter(None,[settings.take_two_ad_id, settings.take_two_script_supervisor_id])),
                          'availability_confirmation': [settings.take_two_ad_id] if settings.take_two_ad_id else []},
             worker_ids={role: value for role, value in (
                 ('script-supervisor', settings.take_two_supervisor_sender_id),

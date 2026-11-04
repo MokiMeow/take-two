@@ -207,12 +207,13 @@ async def main() -> None:
                 delivered=any('@Dev that was release 1.' in p.get('message','') and 'release 2' in p.get('message','') for p in posts.values())
                 return local and delivered
             await wait_for(corrected,timeout=30,label='Dev stale reply correction')
-            for role in ('maya','dev','leela'):
+            for role in final['releases'][0]['acks']['expected']:
                 await mm.post(role,'confirm r2')
             async def confirmed() -> dict[str,Any] | None:
                 current=await state()
-                return current if len(current['releases'][0]['acks']['confirmed'])==3 else None
-            final=await wait_for(confirmed,timeout=30,label='three current confirmations')
+                r=current['releases'][0]
+                return current if {a['person'] for a in r['acks']['confirmed']}==set(r['acks']['expected']) else None
+            final=await wait_for(confirmed,timeout=30,label='affected-call confirmations')
             assert final['revisions']==dict(script=1,constraints=3)
             assert final['releases'][0]['call_sheet_url'] and final['releases'][0]['preview_url']
             # These assertions inspect the real HTTP state, not local Loop internals.

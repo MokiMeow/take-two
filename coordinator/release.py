@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from coordinator.constraints import Manifest
-from coordinator.render_props import callsheet_props, operational, hhmm, preview_props
+from coordinator.render_props import callsheet_props, call_times, operational, hhmm, preview_props
 from coordinator.schedules import check_schedule, digest, plans, retained_plans, snapshot
 from coordinator.workflow_models import workflow_transaction
 
@@ -49,19 +49,20 @@ class ReleaseTransitions:
             scene = next(s for s in metadata['scenes'] if s['id']==m['scene_id'])
             coverage = ', reduced coverage' if 'reduced' in candidate['label'].lower() else ''
             summary = f"Scene {scene['number']} moves to the {m['location']}, {hhmm(m['start'])}–{hhmm(m['end'])}{coverage}."
-        else:
+        elif number == 1:
             summary = 'Initial complete three-scene schedule approved.'
+        else:
+            summary = candidate['label']+'.'
         stamp = self._stamp()
         identity = dict(number=number,release_id=release_id,manifest_hash=digest(manifest),summary=summary,
             changes=[f"Director chose: {candidate['label']}"],created_at=stamp)
         envelope = dict(manifest=manifest,previous_manifest=previous,metadata=metadata,release=identity,
             approved_candidate_hash=candidate['manifest_hash'],request_id=question['request_id'])
-        props = callsheet_props(envelope)  # Validate the complete immutable artifact input before commit.
-        changed_names = {p['name'] for p in props['crew'] if p['changed']}
-        expected = [p['id'] for p in metadata['crew'] if p['name'] in changed_names]
+        callsheet_props(envelope)  # Validate the complete immutable artifact input before commit.
+        times, old_times = call_times(manifest), call_times(previous or dict(scenes=[]))
+        expected = [p['id'] for p in metadata['crew'] if times.get(p['id']) != old_times.get(p['id'])]
         for member in state['crew']:
-            row = next(p for p in props['crew'] if p['name']==member['name'])
-            member.update(affected=member['id'] in expected,call_time=row['call_time'])
+            member.update(affected=member['id'] in expected,call_time=times.get(member['id']))
             if member['affected']:
                 member['acked_release']=None
         release = dict(release_id=release_id,number=number,status='approved',created_at=stamp,

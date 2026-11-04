@@ -30,6 +30,8 @@ def parse_command(text: str, reporter: str, source_message_id: str) -> ParsedRep
     if not text.startswith('/change'):
         return ParsedReport(**base, status='pending_confirmation')
     parts = text.split(maxsplit=4)
+    if len(parts) == 4 and parts[1] == 'capability':
+        parts.insert(3,'status')
     if len(parts) != 5 or parts[0] != '/change':
         return ParsedReport(**base, status='rejected', reason='Use /change <entity> <target> <field> <value>.')
     try:

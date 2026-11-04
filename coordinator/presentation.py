@@ -26,10 +26,11 @@ def person_label(identity: str, names: dict[str, str], roles: dict[str, str]) ->
 def resolved_change_at(command: ChangeCommand, facts: Constraints, fallback: str) -> str:
     """Expose precisely the validated time used by the checker; retain raw value."""
     collection = {'person': 'people', 'location': 'locations'}.get(command.entity)
-    if collection and command.field in ('hard_stop', 'light_until', 'available', 'windows'):
+    if collection and command.field in ('hard_stop', 'light_until', 'available', 'windows', 'window', 'late_by'):
         target = next((row for row in getattr(facts, collection) if row.id == command.target), None)
-        value = getattr(target, command.field, None)
-        if command.field in ('available', 'windows'):
+        field = {'late_by':'available','window':'windows'}.get(command.field,command.field)
+        value = getattr(target, field, None)
+        if field in ('available', 'windows'):
             value = min((window.start for window in value), default=None) if isinstance(value, list) else None
         if value is not None:
             return value.astimezone(ZoneInfo(facts.timezone)).isoformat()

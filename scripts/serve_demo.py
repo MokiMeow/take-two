@@ -1,5 +1,6 @@
 """Serve the last verified real-server rehearsal ledger on the Control Room port."""
 import asyncio
+import argparse
 from pathlib import Path
 
 import uvicorn
@@ -9,8 +10,7 @@ from coordinator.config import Settings
 from coordinator.runtime import Runtime
 
 
-async def main() -> None:
-    path=Path('data/w4-demo/settings.json')
+async def main(path: Path = Path('data/w4-demo/settings.json')) -> None:
     if path.stat().st_size>65536:
         raise ValueError('Rehearsal settings exceed 64 KiB')
     settings=Settings(_env_file=None,**__import__('json').loads(path.read_text(encoding='utf-8')))
@@ -24,4 +24,6 @@ async def main() -> None:
 
 
 if __name__=='__main__':
-    asyncio.run(main())
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--settings',type=Path,default=Path('data/w4-demo/settings.json'))
+    asyncio.run(main(parser.parse_args().settings))

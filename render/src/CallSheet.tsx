@@ -6,7 +6,7 @@ const INK = "#1a1916";
 const MUTED = "#5f5a4f";
 const RULE = "rgba(26,25,22,0.22)";
 
-function hhmm(iso: string | undefined) {
+function hhmm(iso: string | null | undefined) {
   if (!iso) return "—";
   const m = /T(\d\d:\d\d)/.exec(iso);
   return m ? m[1] : iso;
@@ -55,15 +55,24 @@ export const CallSheet: React.FC<CallSheetProps> = (p) => {
           </tr>
         </thead>
         <tbody>
-          {p.scenes.map((s) => (
-            <tr key={s.number} style={{ borderBottom: `1px solid ${RULE}` }}>
-              <td style={{ ...td, ...mono, fontWeight: 700 }}>{s.number}{s.changed ? "*" : ""}</td>
-              <td style={{ ...td, ...mono, fontSize: 16 }}>{heading(s.location)}</td>
-              <td style={{ ...td, fontFamily: "Courier Prime" }}>{s.title}</td>
-              <td style={{ ...td, ...mono, fontSize: 16 }}>{s.cast.join(", ")}</td>
-              <td style={{ ...td, ...mono, textAlign: "right" }}>{hhmm(s.start)}–{hhmm(s.end)}</td>
-            </tr>
-          ))}
+          {p.scenes.map((s) =>
+            s.status === "held" ? (
+              <tr key={s.number} style={{ borderBottom: `1px solid ${RULE}`, background: "repeating-linear-gradient(-45deg, rgba(26,25,22,0.06) 0 8px, transparent 8px 16px)" }}>
+                <td style={{ ...td, ...mono, fontWeight: 700 }}>{s.number}{s.changed ? "*" : ""}</td>
+                <td style={{ ...td, ...mono, fontSize: 16, fontWeight: 700, letterSpacing: 2 }}>ON HOLD</td>
+                <td style={{ ...td, fontFamily: "Courier Prime" }}>{s.title}</td>
+                <td colSpan={2} style={{ ...td, color: MUTED, fontSize: 16 }}>{s.hold_reason}</td>
+              </tr>
+            ) : (
+              <tr key={s.number} style={{ borderBottom: `1px solid ${RULE}` }}>
+                <td style={{ ...td, ...mono, fontWeight: 700 }}>{s.number}{s.changed ? "*" : ""}</td>
+                <td style={{ ...td, ...mono, fontSize: 16 }}>{heading(s.location)}</td>
+                <td style={{ ...td, fontFamily: "Courier Prime" }}>{s.title}</td>
+                <td style={{ ...td, ...mono, fontSize: 16 }}>{s.cast.join(", ")}</td>
+                <td style={{ ...td, ...mono, textAlign: "right" }}>{hhmm(s.start)}–{hhmm(s.end)}</td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
 
@@ -85,7 +94,7 @@ export const CallSheet: React.FC<CallSheetProps> = (p) => {
       <Heading>LOCATIONS</Heading>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 18 }}>
         {p.locations.map((l) => (
-          <div key={l.name}><b>{l.name}.</b> <span style={{ color: MUTED }}>{l.note}</span></div>
+          <div key={l.name}><b>{l.name}.</b> {l.note && <span style={{ color: MUTED }}>{l.note}</span>}</div>
         ))}
       </div>
 

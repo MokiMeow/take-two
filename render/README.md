@@ -4,7 +4,7 @@ Remotion 4.0.539. Two outputs, both built from data (never generated code):
 
 | Kind | Size | Output | Input schema |
 |---|---|---|---|
-| `preview` | 960×540, 15 fps, 5 s (a pencil animatic with line boil) | MP4 (h264) | `previewSchema` in `src/schema.ts` |
+| `preview` | 960×540, 15 fps, 5 s (a pencil animatic with line boil) | MP4 (h264) | `previewSchema` in `src/schema.ts` (strict) |
 | `callsheet` | 1200×1360 PNG, printed on the release's script-revision colour | PNG | `callSheetSchema` in `src/schema.ts` |
 
 ```

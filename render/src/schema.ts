@@ -1,54 +1,83 @@
 import { z } from "zod";
 
-// Input for one 5-second option preview. The coordinator writes this as JSON from an
-// approved-or-candidate manifest; nothing here is generated code.
-export const previewSchema = z.object({
-  letter: z.string().max(2),
-  label: z.string().max(80),
-  scene_number: z.number().int().min(0),
-  scene_title: z.string().max(80),
-  location: z.string().max(40),
-  start: z.string(),
-  end: z.string(),
-  shots: z.array(z.string().max(30)).min(1).max(6),
-  people: z.array(z.object({ id: z.string(), name: z.string().max(30) })).max(4),
-  sunset: z.boolean().optional(),
-  crowd: z.boolean().optional(),
-  manifest_hash: z.string().max(80),
-});
+// Render inputs. cli.mjs validates every input with these schemas in strict mode BEFORE rendering,
+// because Remotion merges defaultProps into input props and would otherwise hide missing fields.
+// Every field is required; "no value" is an explicit null, never an omitted key.
+
+const id = z.string().min(1).max(64);
+const text = (max: number) => z.string().min(1).max(max);
+const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?([+-]\d{2}:\d{2}|Z)$/, "ISO timestamp with offset");
+const hash = z.string().regex(/^sha256:[0-9a-f]{7,64}$/);
+
+export const LIMITS = { shots: 6, people: 8, scenes: 20, crew: 30, locations: 8, changes: 6, manifestBytes: 262144 } as const;
+
+export const previewSchema = z
+  .object({
+    letter: z.string().regex(/^[A-Z]$/),
+    label: text(80),
+    scene_number: z.number().int().min(0).max(999),
+    scene_title: text(80),
+    location: text(40),
+    start: iso,
+    end: iso,
+    shots: z.array(text(30)).min(1).max(LIMITS.shots),
+    people: z.array(z.object({ id, name: text(40) }).strict()).max(LIMITS.people),
+    sunset: z.boolean().nullable(), // null = decide from the location
+    crowd: z.boolean().nullable(), // null = decide from the location
+    manifest_hash: hash,
+  })
+  .strict();
 export type PreviewProps = z.infer<typeof previewSchema>;
 
-export const callSheetSchema = z.object({
-  production: z.object({ title: z.string(), day: z.string(), date: z.string(), timezone: z.string() }),
-  release: z.object({
-    number: z.number().int().min(1),
-    release_id: z.string(),
-    manifest_hash: z.string(),
-    summary: z.string(),
-    changes: z.array(z.string()).max(6),
-    created_at: z.string(),
-  }),
-  general_call: z.string(),
-  sunset: z.string().optional(),
-  scenes: z.array(
-    z.object({
-      number: z.number(),
-      title: z.string(),
-      location: z.string(),
-      start: z.string(),
-      end: z.string(),
-      cast: z.array(z.string()),
-      changed: z.boolean().optional(),
-    }),
-  ).max(12),
-  crew: z.array(
-    z.object({ name: z.string(), role: z.string(), call_time: z.string(), changed: z.boolean().optional() }),
-  ).max(20),
-  locations: z.array(z.object({ name: z.string(), note: z.string().optional() })).max(6),
-  confirm_hint: z.string(),
-});
+const sceneRow = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("scheduled"),
+      number: z.number().int().min(0).max(999),
+      title: text(80),
+      location: text(40),
+      start: iso,
+      end: iso,
+      cast: z.array(text(8)).max(LIMITS.people),
+      changed: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("held"),
+      number: z.number().int().min(0).max(999),
+      title: text(80),
+      hold_reason: text(200),
+      changed: z.boolean(),
+    })
+    .strict(),
+]);
+export type SceneRow = z.infer<typeof sceneRow>;
+
+export const callSheetSchema = z
+  .object({
+    production: z.object({ title: text(80), day: text(40), date: text(60), timezone: text(40) }).strict(),
+    release: z
+      .object({
+        number: z.number().int().min(1).max(999),
+        release_id: id,
+        manifest_hash: hash,
+        summary: text(400),
+        changes: z.array(text(160)).max(LIMITS.changes),
+        created_at: iso,
+      })
+      .strict(),
+    general_call: iso,
+    sunset: iso.nullable(),
+    scenes: z.array(sceneRow).min(1).max(LIMITS.scenes),
+    crew: z.array(z.object({ name: text(40), role: text(60), call_time: iso.nullable(), changed: z.boolean() }).strict()).max(LIMITS.crew),
+    locations: z.array(z.object({ name: text(40), note: z.string().max(160).nullable() }).strict()).max(LIMITS.locations),
+    confirm_hint: text(120),
+  })
+  .strict();
 export type CallSheetProps = z.infer<typeof callSheetSchema>;
 
+// Studio-only sample data. The CLI never relies on these.
 export const previewDefaults: PreviewProps = {
   letter: "A",
   label: "Stairwell, reduced coverage",
@@ -57,8 +86,10 @@ export const previewDefaults: PreviewProps = {
   location: "stairwell",
   start: "2026-11-06T16:30:00+05:30",
   end: "2026-11-06T17:15:00+05:30",
-  shots: ["wide", "two-shot", "close-up"],
+  shots: ["two-shot", "close-up"],
   people: [{ id: "maya", name: "Maya" }, { id: "dev", name: "Dev" }],
+  sunset: null,
+  crowd: null,
   manifest_hash: "sha256:eaaed26f",
 };
 
@@ -75,9 +106,9 @@ export const callSheetDefaults: CallSheetProps = {
   general_call: "2026-11-06T14:45:00+05:30",
   sunset: "2026-11-06T17:52:00+05:30",
   scenes: [
-    { number: 1, title: "The missed call", location: "stairwell", start: "2026-11-06T15:00:00+05:30", end: "2026-11-06T15:15:00+05:30", cast: ["2"] },
-    { number: 2, title: "A promise", location: "courtyard", start: "2026-11-06T15:25:00+05:30", end: "2026-11-06T15:35:00+05:30", cast: ["1", "2"] },
-    { number: 3, title: "The confession", location: "stairwell", start: "2026-11-06T16:30:00+05:30", end: "2026-11-06T17:15:00+05:30", cast: ["1", "2"], changed: true },
+    { status: "scheduled", number: 1, title: "The missed call", location: "stairwell", start: "2026-11-06T15:00:00+05:30", end: "2026-11-06T15:15:00+05:30", cast: ["2"], changed: false },
+    { status: "scheduled", number: 2, title: "A promise", location: "courtyard", start: "2026-11-06T15:25:00+05:30", end: "2026-11-06T15:35:00+05:30", cast: ["1", "2"], changed: false },
+    { status: "scheduled", number: 3, title: "The confession", location: "stairwell", start: "2026-11-06T16:30:00+05:30", end: "2026-11-06T17:15:00+05:30", cast: ["1", "2"], changed: true },
   ],
   crew: [
     { name: "Maya", role: "Actor (1)", call_time: "2026-11-06T16:15:00+05:30", changed: true },

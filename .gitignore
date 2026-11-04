@@ -5,3 +5,4 @@ node_modules/
 __pycache__/
 *.sqlite
 narration-takes/
+work/*.log

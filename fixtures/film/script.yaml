@@ -1,0 +1,31 @@
+script_rev: 1
+title: The Last Light
+shoot_day: '2026-11-06'
+timezone: Asia/Kolkata
+locked_by: arun
+breakdown_reviewed_by: arun
+scenes:
+  - id: s1
+    number: 1
+    title: The missed call
+    synopsis: Dev listens to Maya's message before the meeting.
+    people: [dev]
+    props: [phone]
+    hard: [Dev receives the message]
+    preferences: [quiet opening]
+  - id: s2
+    number: 2
+    title: A promise
+    synopsis: Maya agrees to meet Dev before sunset.
+    people: [maya, dev]
+    props: [phone]
+    hard: [Maya agrees to meet Dev]
+    preferences: [natural light]
+  - id: s3
+    number: 3
+    title: The confession
+    synopsis: Maya confesses to Dev; nobody else in the story hears her.
+    people: [maya, dev]
+    props: []
+    hard: [confession is intelligible and confidential in the story]
+    preferences: [visually secluded, sunset]

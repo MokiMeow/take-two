@@ -1,0 +1,54 @@
+# Original Take Two template; schema checked against Switch 989225d8.
+# Provision room structure only. Coordinator creates all mutable documents.
+params:
+  name:
+    type: string
+    default: production
+    description: Private production channel name
+  bridge:
+    type: bridge
+    description: Configured Mattermost bridge display name
+  coordinator:
+    type: agent
+    default: take-two-coordinator
+    description: Persisted coordinator identity's registered name
+  script_supervisor:
+    type: agent
+    description: Distinct Console agent identity for the Script Supervisor
+  first_ad:
+    type: agent
+    description: Distinct Console agent identity for the 1st AD
+room:
+  name: "{name}"
+  description: Take Two production decisions and checked candidate plans
+  bridge: "{bridge}"
+  channel_type: channel_private
+  read_visibility: private
+  write_visibility: private
+  agents: ["{coordinator}", "{script_supervisor}", "{first_ad}"]
+  users: ["{$creator}"]
+  instructions: |
+    Humans decide in native Switch question cards. Agents propose; the
+    coordinator checks constraints, records revisions, holds and releases.
+    Script Supervisor and 1st AD use separate identities. Each connects here
+    and explicitly assumes its exclusive role. Configure both addressing
+    policies to accept messages from the coordinator before starting work.
+    Report changes as /change <entity> <id> <field> <value>.
+    Unstructured reports remain pending until a human confirms the facts.
+    An old question never authorizes a plan under newer source revisions.
+  roles:
+    - name: script-supervisor
+      exclusive: true
+      instructions: |
+        Read the supplied script and constraints. Return the scene's hard
+        story requirements and preferences before the 1st AD proposes plans.
+        Reply to the coordinator with job_id and both source revisions.
+        Never select, approve or publish a candidate. Never edit documents.
+    - name: first-ad
+      exclusive: true
+      instructions: |
+        After the Script Supervisor responds, propose complete manifests
+        with scene and shot IDs, location, people, timezone-aware start/end,
+        setup/wrap minutes and required capabilities. Return job_id and both
+        source revisions, explicitly addressing the coordinator.
+        Say unknown for missing facts; never certify feasibility or publish.

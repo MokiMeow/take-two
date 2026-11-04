@@ -1,0 +1,72 @@
+timezone: Asia/Kolkata
+script_rev: 1
+constraints_rev: 1
+people:
+  - id: maya
+    role: actor
+    available: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
+    hard_stop: '2026-11-06T20:00:00+05:30'
+  - id: dev
+    role: actor
+    available: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
+    hard_stop: '2026-11-06T20:00:00+05:30'
+  - id: leela
+    role: camera_sound
+    available: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
+    hard_stop: '2026-11-06T20:00:00+05:30'
+locations:
+  - id: rooftop
+    permission: confirmed
+    permission_authority: producer
+    permission_confirmed_by: producer
+    windows: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
+    light_until: '2026-11-06T18:20:00+05:30'
+  - id: courtyard
+    permission: confirmed
+    permission_authority: producer
+    permission_confirmed_by: producer
+    windows: ['2026-11-06T14:00:00+05:30/2026-11-06T17:00:00+05:30']
+    light_until: '2026-11-06T18:20:00+05:30'
+  - id: stairwell
+    permission: confirmed
+    permission_authority: producer
+    permission_confirmed_by: producer
+    windows: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
+  - id: park
+    permission: confirmed
+    permission_authority: producer
+    permission_confirmed_by: producer
+    windows: ['2026-11-06T14:00:00+05:30/2026-11-06T20:00:00+05:30']
+    light_until: '2026-11-06T18:20:00+05:30'
+travel_min:
+  rooftop->stairwell: 15
+  stairwell->rooftop: 15
+  stairwell->courtyard: 0
+  courtyard->stairwell: 0
+  courtyard->park: 15
+  park->courtyard: 15
+  stairwell->park: 15
+  park->stairwell: 15
+capabilities:
+  sound_recorder: confirmed
+  gimbal: confirmed
+  second_camera: unknown
+scenes:
+  - id: s1
+    hard: [Dev receives the message]
+    preferences: [quiet opening]
+    verified_facts:
+      stairwell: {Dev receives the message: confirmed}
+  - id: s2
+    hard: [Maya agrees to meet Dev]
+    preferences: [natural light]
+    verified_facts:
+      courtyard: {Maya agrees to meet Dev: confirmed}
+  - id: s3
+    hard: [confession is intelligible and confidential in the story]
+    preferences: [visually secluded, sunset]
+    verified_facts:
+      rooftop: {confession is intelligible and confidential in the story: confirmed}
+      courtyard: {confession is intelligible and confidential in the story: confirmed}
+      stairwell: {confession is intelligible and confidential in the story: confirmed}
+      park: {confession is intelligible and confidential in the story: confirmed}

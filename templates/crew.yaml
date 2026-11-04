@@ -1,0 +1,40 @@
+# Original Take Two template; schema checked against Switch 989225d8.
+# Crew names are usernames on the selected bridge. Link the owner's Discord
+# identity before provisioning, so {$creator} resolves to the right account.
+params:
+  name:
+    type: string
+    default: crew
+    description: Standing crew channel name
+  bridge:
+    type: bridge
+    description: Configured Discord bridge display name
+  coordinator:
+    type: agent
+    default: take-two-coordinator
+    description: Persisted coordinator identity's registered name
+  actor:
+    type: user
+    description: Actor username on the Discord bridge
+  camera:
+    type: user
+    description: Camera operator username on the Discord bridge
+  sound:
+    type: user
+    description: Sound recordist username on the Discord bridge
+room:
+  name: "{name}"
+  description: Approved Take Two plans, holds, reports and crew confirmations
+  bridge: "{bridge}"
+  channel_type: channel_private
+  read_visibility: private
+  write_visibility: private
+  agents: ["{coordinator}"]
+  users: ["{$creator}", "{actor}", "{camera}", "{sound}"]
+  instructions: |
+    Holds apply immediately to the affected scene. Follow the current
+    release ID, and confirm explicitly with "confirm r<number>".
+    Anyone can report a safety hold. Free-text changes require confirmation
+    in production before they become facts. Creative choices and unapproved
+    options stay in the private production room. Room links do not relay
+    messages; the coordinator publishes each approved release explicitly.

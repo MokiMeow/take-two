@@ -1,0 +1,44 @@
+# Original Take Two template; schema checked against Switch 989225d8.
+# No inline docs: the coordinator creates agent-owned, mutable day documents
+# after provisioning and stores room_id. Inspect failed_attachments.
+params:
+  name:
+    type: string
+    default: day-1
+    description: Shoot-day channel name
+  bridge:
+    type: bridge
+    description: Configured Discord bridge display name
+  coordinator:
+    type: agent
+    default: take-two-coordinator
+    description: Persisted coordinator identity's registered name
+  shoot_date:
+    type: string
+    default: "2026-11-06"
+    description: Shoot date in the production timezone
+  actor:
+    type: user
+    description: Actor username on the Discord bridge
+  camera:
+    type: user
+    description: Camera operator username on the Discord bridge
+  sound:
+    type: user
+    description: Sound recordist username on the Discord bridge
+room:
+  name: "{name}"
+  description: "Take Two approved call sheets for {shoot_date}"
+  bridge: "{bridge}"
+  channel_type: channel_private
+  read_visibility: private
+  write_visibility: private
+  agents: ["{coordinator}"]
+  users: ["{$creator}", "{actor}", "{camera}", "{sound}"]
+  instructions: |
+    Shoot date: {shoot_date}. All call times include the production timezone.
+    Only holds and approved releases are published here. The release ID on
+    the call sheet, text and preview must agree. Explicitly confirm the
+    current release with "confirm r<number>". An older confirmation never
+    counts for a new affected duty. Follow active scene holds until the
+    coordinator publishes a checked replacement with recorded clearance.

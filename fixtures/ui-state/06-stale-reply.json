@@ -1,0 +1,454 @@
+{
+  "production": {
+    "id": "take-two-demo",
+    "title": "The Last Light",
+    "timezone": "Asia/Kolkata",
+    "now": "2026-11-06T14:28:00+05:30",
+    "day": "Day 1 - 6 November"
+  },
+  "revisions": {
+    "script": 1,
+    "constraints": 3
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "number": 1,
+      "title": "The missed call",
+      "hard": [
+        "Dev receives the message"
+      ],
+      "preferences": [
+        "quiet opening"
+      ],
+      "validity": "valid",
+      "plan": {
+        "location": "stairwell",
+        "start": "2026-11-06T15:00:00+05:30",
+        "end": "2026-11-06T15:15:00+05:30",
+        "setup_min": 10,
+        "wrap_min": 5,
+        "people": [
+          "dev",
+          "leela"
+        ]
+      }
+    },
+    {
+      "id": "s2",
+      "number": 2,
+      "title": "A promise",
+      "hard": [
+        "Maya agrees to meet Dev"
+      ],
+      "preferences": [
+        "natural light"
+      ],
+      "validity": "valid",
+      "plan": {
+        "location": "courtyard",
+        "start": "2026-11-06T15:25:00+05:30",
+        "end": "2026-11-06T15:35:00+05:30",
+        "setup_min": 5,
+        "wrap_min": 5,
+        "people": [
+          "maya",
+          "dev",
+          "leela"
+        ]
+      }
+    },
+    {
+      "id": "s3",
+      "number": 3,
+      "title": "The confession",
+      "hard": [
+        "confession is intelligible and confidential in the story"
+      ],
+      "preferences": [
+        "visually secluded",
+        "sunset"
+      ],
+      "validity": "valid",
+      "plan": {
+        "location": "stairwell",
+        "start": "2026-11-06T16:30:00+05:30",
+        "end": "2026-11-06T17:15:00+05:30",
+        "setup_min": 15,
+        "wrap_min": 10,
+        "people": [
+          "maya",
+          "dev",
+          "leela"
+        ]
+      }
+    }
+  ],
+  "changes": [
+    {
+      "id": "change-hard-stop",
+      "at": "2026-11-06T14:15:00+05:30",
+      "reporter": "first-ad-human",
+      "entity": "person",
+      "target": "maya",
+      "field": "hard_stop",
+      "value": "2026-11-06T18:00:00+05:30",
+      "status": "recorded",
+      "source": "mattermost",
+      "constraints_rev": 3
+    },
+    {
+      "id": "change-rooftop",
+      "at": "2026-11-06T14:05:00+05:30",
+      "reporter": "producer",
+      "entity": "location",
+      "target": "rooftop",
+      "field": "permission",
+      "value": "refused",
+      "status": "recorded",
+      "source": "mattermost",
+      "constraints_rev": 2
+    }
+  ],
+  "jobs": [
+    {
+      "job_id": "job-supervisor-r3",
+      "role": "script-supervisor",
+      "status": "done",
+      "started_at": "2026-11-06T14:15:00+05:30",
+      "deadline": "2026-11-06T14:17:00+05:30",
+      "summary": "Hard story requirement unchanged."
+    },
+    {
+      "job_id": "job-ad-r3",
+      "role": "first-ad",
+      "status": "done",
+      "started_at": "2026-11-06T14:17:00+05:30",
+      "deadline": "2026-11-06T14:20:00+05:30",
+      "summary": "Stairwell full and reduced coverage pass; park fails the new hard stop."
+    }
+  ],
+  "decision": {
+    "request_id": "decision-r3",
+    "status": "answered",
+    "question": "Which stairwell coverage should we use before Maya leaves at 18:00?",
+    "authority": "Director (Arun)",
+    "bound": {
+      "script": 1,
+      "constraints": 3
+    },
+    "opened_at": "2026-11-06T14:20:00+05:30",
+    "expires_at": "2026-11-06T16:20:00+05:30",
+    "candidates": [
+      {
+        "candidate_id": "s3-stairwell-reduced",
+        "label": "Stairwell, reduced coverage",
+        "story_cost": "One angle fewer; keeps the confession private and gives more setup buffer.",
+        "check": {
+          "result": "pass",
+          "reasons": []
+        },
+        "manifest": {
+          "scene_id": "s3",
+          "location": "stairwell",
+          "start": "2026-11-06T16:30:00+05:30",
+          "end": "2026-11-06T17:15:00+05:30",
+          "setup_min": 15,
+          "wrap_min": 10,
+          "people": [
+            "maya",
+            "dev",
+            "leela"
+          ],
+          "shots": [
+            "two-shot",
+            "close-up"
+          ],
+          "capabilities": [
+            "sound_recorder"
+          ]
+        },
+        "manifest_hash": "sha256:eaaed2653ff381945efe7ab542374f3fe8a11c4ee28f9a0176e47514aa9fb4ff",
+        "preview_status": "ready",
+        "preview_url": "/media/s3-stairwell-reduced.mp4"
+      },
+      {
+        "candidate_id": "s3-stairwell-full",
+        "label": "Stairwell, full coverage",
+        "story_cost": "Loses the sunset silhouette; keeps the confession private.",
+        "check": {
+          "result": "pass",
+          "reasons": []
+        },
+        "manifest": {
+          "scene_id": "s3",
+          "location": "stairwell",
+          "start": "2026-11-06T16:00:00+05:30",
+          "end": "2026-11-06T17:15:00+05:30",
+          "setup_min": 15,
+          "wrap_min": 10,
+          "people": [
+            "maya",
+            "dev",
+            "leela"
+          ],
+          "shots": [
+            "wide",
+            "two-shot",
+            "close-up"
+          ],
+          "capabilities": [
+            "sound_recorder"
+          ]
+        },
+        "manifest_hash": "sha256:aaec024913cbcc9756958ce4d063a4e8bca7b9d73856ec6c290d6e908a852bd2",
+        "preview_status": "ready",
+        "preview_url": "/media/s3-stairwell-full.mp4"
+      },
+      {
+        "candidate_id": "s3-park",
+        "label": "Park bench",
+        "story_cost": "Keeps sunset, but background people make the scene less intimate; the confession stays confidential in the story.",
+        "check": {
+          "result": "fail",
+          "reasons": [
+            "Maya's 18:00 hard stop is before the 18:15 finish."
+          ]
+        },
+        "manifest": {
+          "scene_id": "s3",
+          "location": "park",
+          "start": "2026-11-06T16:45:00+05:30",
+          "end": "2026-11-06T18:15:00+05:30",
+          "setup_min": 15,
+          "wrap_min": 10,
+          "people": [
+            "maya",
+            "dev",
+            "leela"
+          ],
+          "shots": [
+            "wide",
+            "two-shot",
+            "close-up"
+          ],
+          "capabilities": [
+            "sound_recorder"
+          ]
+        },
+        "manifest_hash": "sha256:b90a9be7ee21432bdcf141d95f9bff9c55063ccd4007e70a4147268ae02e0004",
+        "preview_status": "none"
+      }
+    ],
+    "answer": {
+      "candidate_id": "s3-stairwell-reduced",
+      "note": "Keep the confession private.",
+      "answered_by": "arun",
+      "at": "2026-11-06T14:22:00+05:30"
+    }
+  },
+  "releases": [
+    {
+      "release_id": "r2",
+      "number": 2,
+      "status": "published",
+      "created_at": "2026-11-06T14:24:00+05:30",
+      "manifest_hash": "sha256:eaaed2653ff381945efe7ab542374f3fe8a11c4ee28f9a0176e47514aa9fb4ff",
+      "summary": "Scene 3 moves to the stairwell, 16:30-17:15, with reduced coverage. Scenes 1 and 2 unchanged.",
+      "call_sheet_url": "/media/r2-call-sheet.png",
+      "preview_url": "/media/s3-stairwell-reduced.mp4",
+      "publications": [
+        {
+          "room": "#day-1",
+          "platform": "discord",
+          "status": "sent"
+        },
+        {
+          "room": "#crew",
+          "platform": "discord",
+          "status": "sent"
+        }
+      ],
+      "acks": {
+        "expected": [
+          "maya",
+          "dev",
+          "leela"
+        ],
+        "confirmed": [
+          {
+            "person": "maya",
+            "at": "2026-11-06T14:25:00+05:30"
+          },
+          {
+            "person": "leela",
+            "at": "2026-11-06T14:25:00+05:30"
+          },
+          {
+            "person": "dev",
+            "at": "2026-11-06T14:28:00+05:30"
+          }
+        ],
+        "policy": "affected_only"
+      }
+    },
+    {
+      "release_id": "r1",
+      "number": 1,
+      "status": "superseded",
+      "created_at": "2026-11-06T13:30:00+05:30",
+      "manifest_hash": "sha256:3c45897991a9987931be8ccca90a6fadb2a13b73da70ed4dcd0c367f1db423b1",
+      "summary": "Scenes 1 and 2 unchanged; Scene 3 on the rooftop, 16:45-18:15.",
+      "call_sheet_url": "/media/r1-call-sheet.png",
+      "publications": [
+        {
+          "room": "#day-1",
+          "platform": "discord",
+          "status": "sent"
+        },
+        {
+          "room": "#crew",
+          "platform": "discord",
+          "status": "sent"
+        }
+      ],
+      "acks": {
+        "expected": [
+          "maya",
+          "dev",
+          "leela"
+        ],
+        "confirmed": [
+          {
+            "person": "maya",
+            "at": "2026-11-06T13:45:00+05:30"
+          },
+          {
+            "person": "dev",
+            "at": "2026-11-06T13:45:00+05:30"
+          },
+          {
+            "person": "leela",
+            "at": "2026-11-06T13:45:00+05:30"
+          }
+        ],
+        "policy": "everyone"
+      }
+    }
+  ],
+  "crew": [
+    {
+      "id": "maya",
+      "name": "Maya",
+      "role": "Actor",
+      "call_time": "2026-11-06T16:15:00+05:30",
+      "acked_release": 2,
+      "affected": true
+    },
+    {
+      "id": "dev",
+      "name": "Dev",
+      "role": "Actor",
+      "call_time": "2026-11-06T16:15:00+05:30",
+      "acked_release": 2,
+      "affected": true
+    },
+    {
+      "id": "leela",
+      "name": "Leela",
+      "role": "Camera / sound",
+      "call_time": "2026-11-06T16:15:00+05:30",
+      "acked_release": 2,
+      "affected": true
+    }
+  ],
+  "timeline": [
+    {
+      "at": "2026-11-06T14:28:00+05:30",
+      "kind": "ack",
+      "text": "Dev explicitly confirmed r2; all 3 affected crew confirmed the current release.",
+      "ref": "r2"
+    },
+    {
+      "at": "2026-11-06T14:27:00+05:30",
+      "kind": "stale_reply",
+      "text": "Dev replied to r1 about the rooftop. That is release 1; current plan is release 2 at the stairwell. Please confirm r2.",
+      "ref": "r1"
+    },
+    {
+      "at": "2026-11-06T14:25:00+05:30",
+      "kind": "ack",
+      "text": "Maya and Leela confirmed release 2; Dev is still pending.",
+      "ref": "r2"
+    },
+    {
+      "at": "2026-11-06T14:24:00+05:30",
+      "kind": "release",
+      "text": "Release 2 published: Scene 3 moves to the stairwell, 16:30-17:15.",
+      "ref": "r2"
+    },
+    {
+      "at": "2026-11-06T14:22:00+05:30",
+      "kind": "decision",
+      "text": "Director Arun chose Stairwell, reduced coverage: keep the confession private.",
+      "ref": "decision-r3"
+    },
+    {
+      "at": "2026-11-06T14:19:00+05:30",
+      "kind": "check",
+      "text": "Park now fails Maya's hard stop; both stairwell options pass."
+    },
+    {
+      "at": "2026-11-06T14:15:00+05:30",
+      "kind": "decision",
+      "text": "The revision 2 question is outdated; new options are coming.",
+      "ref": "decision-r2"
+    },
+    {
+      "at": "2026-11-06T14:15:00+05:30",
+      "kind": "change",
+      "text": "The AD confirmed Maya must leave at 18:00; constraints revision 3.",
+      "ref": "change-hard-stop"
+    },
+    {
+      "at": "2026-11-06T14:12:00+05:30",
+      "kind": "decision",
+      "text": "Director Arun has two passing choices, or can choose Neither with a note.",
+      "ref": "decision-r2"
+    },
+    {
+      "at": "2026-11-06T14:11:00+05:30",
+      "kind": "render",
+      "text": "Stairwell and park previews are ready."
+    },
+    {
+      "at": "2026-11-06T14:10:00+05:30",
+      "kind": "check",
+      "text": "Courtyard fails its permission window; stairwell and park pass."
+    },
+    {
+      "at": "2026-11-06T14:05:00+05:30",
+      "kind": "hold",
+      "text": "Scene 3 is ON HOLD. Do not go to the rooftop; scenes 1 and 2 remain valid.",
+      "ref": "s3"
+    },
+    {
+      "at": "2026-11-06T14:05:00+05:30",
+      "kind": "change",
+      "text": "Producer Nila recorded rooftop permission refused, constraints revision 2.",
+      "ref": "change-rooftop"
+    },
+    {
+      "at": "2026-11-06T13:45:00+05:30",
+      "kind": "ack",
+      "text": "All 3 expected crew have confirmed release 1.",
+      "ref": "r1"
+    },
+    {
+      "at": "2026-11-06T13:30:00+05:30",
+      "kind": "release",
+      "text": "Release 1 published to #day-1 and #crew.",
+      "ref": "r1"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+production_id: take-two-demo
+confirmation_policy: affected_only
+ack_deadline_min: 15
+humans:
+  - id: arun
+    name: Arun
+    role: director
+    switch_identity: arun
+    authorities: [creative]
+  - id: producer
+    name: Nila
+    role: producer
+    switch_identity: producer
+    authorities: [money, location_permission]
+  - id: first-ad-human
+    name: Isha
+    role: first-ad
+    switch_identity: first-ad-human
+    authorities: [availability_confirmation]
+crew:
+  - id: maya
+    name: Maya
+    role: actor
+    switch_identity: maya
+    discord_username: maya_demo
+  - id: dev
+    name: Dev
+    role: actor
+    switch_identity: dev
+    discord_username: dev_demo
+  - id: leela
+    name: Leela
+    role: camera_sound
+    switch_identity: leela
+    discord_username: leela_demo

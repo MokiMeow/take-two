@@ -1,0 +1,175 @@
+{
+  "production": {
+    "id": "take-two-demo",
+    "title": "The Last Light",
+    "timezone": "Asia/Kolkata",
+    "now": "2026-11-06T14:00:00+05:30",
+    "day": "Day 1 - 6 November"
+  },
+  "revisions": {
+    "script": 1,
+    "constraints": 1
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "number": 1,
+      "title": "The missed call",
+      "hard": [
+        "Dev receives the message"
+      ],
+      "preferences": [
+        "quiet opening"
+      ],
+      "validity": "valid",
+      "plan": {
+        "location": "stairwell",
+        "start": "2026-11-06T15:00:00+05:30",
+        "end": "2026-11-06T15:15:00+05:30",
+        "setup_min": 10,
+        "wrap_min": 5,
+        "people": [
+          "dev",
+          "leela"
+        ]
+      }
+    },
+    {
+      "id": "s2",
+      "number": 2,
+      "title": "A promise",
+      "hard": [
+        "Maya agrees to meet Dev"
+      ],
+      "preferences": [
+        "natural light"
+      ],
+      "validity": "valid",
+      "plan": {
+        "location": "courtyard",
+        "start": "2026-11-06T15:25:00+05:30",
+        "end": "2026-11-06T15:35:00+05:30",
+        "setup_min": 5,
+        "wrap_min": 5,
+        "people": [
+          "maya",
+          "dev",
+          "leela"
+        ]
+      }
+    },
+    {
+      "id": "s3",
+      "number": 3,
+      "title": "The confession",
+      "hard": [
+        "confession is intelligible and confidential in the story"
+      ],
+      "preferences": [
+        "visually secluded",
+        "sunset"
+      ],
+      "validity": "valid",
+      "plan": {
+        "location": "rooftop",
+        "start": "2026-11-06T16:45:00+05:30",
+        "end": "2026-11-06T18:15:00+05:30",
+        "setup_min": 15,
+        "wrap_min": 10,
+        "people": [
+          "maya",
+          "dev",
+          "leela"
+        ]
+      }
+    }
+  ],
+  "changes": [],
+  "jobs": [],
+  "decision": null,
+  "releases": [
+    {
+      "release_id": "r1",
+      "number": 1,
+      "status": "published",
+      "created_at": "2026-11-06T13:30:00+05:30",
+      "manifest_hash": "sha256:3c45897991a9987931be8ccca90a6fadb2a13b73da70ed4dcd0c367f1db423b1",
+      "summary": "Scenes 1 and 2 unchanged; Scene 3 on the rooftop, 16:45-18:15.",
+      "call_sheet_url": "/media/r1-call-sheet.png",
+      "publications": [
+        {
+          "room": "#day-1",
+          "platform": "discord",
+          "status": "sent"
+        },
+        {
+          "room": "#crew",
+          "platform": "discord",
+          "status": "sent"
+        }
+      ],
+      "acks": {
+        "expected": [
+          "maya",
+          "dev",
+          "leela"
+        ],
+        "confirmed": [
+          {
+            "person": "maya",
+            "at": "2026-11-06T13:45:00+05:30"
+          },
+          {
+            "person": "dev",
+            "at": "2026-11-06T13:45:00+05:30"
+          },
+          {
+            "person": "leela",
+            "at": "2026-11-06T13:45:00+05:30"
+          }
+        ],
+        "policy": "everyone"
+      }
+    }
+  ],
+  "crew": [
+    {
+      "id": "maya",
+      "name": "Maya",
+      "role": "Actor",
+      "call_time": "2026-11-06T14:45:00+05:30",
+      "acked_release": 1,
+      "affected": false
+    },
+    {
+      "id": "dev",
+      "name": "Dev",
+      "role": "Actor",
+      "call_time": "2026-11-06T14:45:00+05:30",
+      "acked_release": 1,
+      "affected": false
+    },
+    {
+      "id": "leela",
+      "name": "Leela",
+      "role": "Camera / sound",
+      "call_time": "2026-11-06T14:45:00+05:30",
+      "acked_release": 1,
+      "affected": false
+    }
+  ],
+  "timeline": [
+    {
+      "at": "2026-11-06T13:45:00+05:30",
+      "kind": "ack",
+      "text": "All 3 expected crew have confirmed release 1.",
+      "ref": "r1"
+    },
+    {
+      "at": "2026-11-06T13:30:00+05:30",
+      "kind": "release",
+      "text": "Release 1 published to #day-1 and #crew.",
+      "ref": "r1"
+    }
+  ]
+}

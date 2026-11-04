@@ -1,0 +1,23 @@
+# Original build recipe: deploy/local/standalone-docker-compose.build.yml, 989225d8.
+# License: Apache-2.0 with modified Commons Clause, included in LICENSE.switch.
+# Changed to explicit read-only source context and bounded startup behavior.
+services:
+  switch:
+    build:
+      context: E:/DevDrive/switch
+      dockerfile: deploy/shared_resources/images/Dockerfile.switch
+    restart: "no"
+  gateway:
+    build:
+      context: E:/DevDrive/switch
+      dockerfile: deploy/shared_resources/images/Dockerfile.gateway
+    restart: "no"
+  setup:
+    build:
+      context: E:/DevDrive/switch
+      dockerfile: deploy/shared_resources/images/Dockerfile.setup
+    restart: "no"
+  postgres:
+    restart: "no"
+  mattermost:
+    restart: "no"

@@ -6,3 +6,7 @@ __pycache__/
 *.sqlite
 narration-takes/
 work/*.log
+.pytest_cache/
+.pytest_tmp*/
+.test-tmp*/
+.venv/

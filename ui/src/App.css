@@ -1,32 +1,33 @@
-.boot { height: 100%; display: grid; place-items: center; }
-
-.app { height: 100%; display: flex; flex-direction: column; min-height: 0; }
-.board {
-  flex: 1; min-height: 0;
+.app {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 32px 40px;
+}
+.layout {
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(340px, 380px);
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  align-items: start;
 }
-.col { min-height: 0; display: flex; flex-direction: column; gap: 22px; padding: 20px 22px 22px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-.col-left { border-right: 1px solid var(--line); background: #0c0c0e; overflow: hidden; }
-.col-right { border-left: 1px solid var(--line); background: #0c0c0e; }
-.col-center { padding: 28px 36px 36px; gap: 26px; background: radial-gradient(1200px 500px at 30% -10%, #17171b 0%, transparent 60%), var(--desk); }
+.side { display: grid; gap: 12px; }
 
-.desk-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.desk-pipeline {
-  padding: 16px 14px 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+.boot {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--secondary);
+  font-size: 13px;
 }
+.boot-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hold); }
 
-@media (max-width: 1180px) {
-  .board { grid-template-columns: 1fr; overflow-y: auto; }
-  .col { overflow: visible; border: 0 !important; }
-  .col-left { order: 2; }
-  .col-right { order: 3; }
-  .col-center { padding: 20px 16px; }
-  .headline-line { font-size: 34px; }
-  .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 14px; }
-  .pipeline-rail { display: none; }
-  .candidates { grid-template-columns: 1fr !important; }
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
 }
+@media (max-width: 760px) {
+  .app { padding: 0 16px 32px; }
+  .sheet { --label: 132px; padding: 16px 14px 12px; overflow-x: auto; }
+}
+.main-col { display: grid; gap: 12px; min-width: 0; }

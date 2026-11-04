@@ -1,0 +1,15 @@
+@import "./kit/iso.css";
+
+/* Anatomy theme retuned to the board's charcoal so the models sit on the card. */
+.set.iso {
+  --anatomy-paper: #20262a; --anatomy-face: #2a3136; --anatomy-top: #283035;
+  --anatomy-shade-0: #171b1e; --anatomy-shade-1: #1b2023; --anatomy-shade-2: #1f2428; --anatomy-shade-3: #232a2e;
+  --anatomy-lit-top: #f3f1ea; --anatomy-lit-shade: #cfccc2;
+  --anatomy-hi: #d9dcd6; --anatomy-mid: #76817f; --anatomy-lo: #434c50; --anatomy-faint: #30383c; --anatomy-lit: #ffffff;
+  --anatomy-halo: #07090a; --anatomy-dot: #eff0e9;
+  --set-cone: #eff0e914; --set-sun: #ff704926; --set-sun-core: #ffb08a;
+  display: block;
+  border-radius: 8px;
+  background: radial-gradient(120% 90% at 50% 40%, #232a2f, #1a1f22);
+}
+.set.iso svg { display: block; width: 100%; height: auto; }

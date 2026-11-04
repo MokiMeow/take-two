@@ -10,3 +10,4 @@ work/*.log
 .pytest_tmp*/
 .test-tmp*/
 .venv/
+.remotion/

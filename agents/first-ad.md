@@ -43,7 +43,22 @@ Reply in the production room, addressed to `@take-two-coordinator`, with **one**
   ]
 }
 ```
+### One scene or several
+- A candidate carries **either** `manifest` (one scene, as above) **or** `manifests` (a list, one entry per scene). Never both.
+- Use `manifests` when the job covers more than one scene:
+  - **The initial plan** (the job's `schedule_contract` says so): one entry for **every** scene in the script, the whole day approved once.
+  - **Several held scenes** (for example a late actor holds Scenes 1 and 2): one entry for each held scene the job lists. Do not include scenes that are still valid unless the job says a ripple forces them to move.
+- Each entry in `manifests` has exactly the fields of `manifest` above.
+
+```json
+"manifests": [
+  { "scene_id": "s1", "location": "stairwell", "start": "2026-11-06T15:40:00+05:30", "end": "2026-11-06T15:55:00+05:30", "setup_min": 10, "wrap_min": 5, "people": ["dev", "leela"], "shots": ["wide", "close-up"], "capabilities": ["sound_recorder"], "script_rev": 1, "constraints_rev": 3, "requires_light": false },
+  { "scene_id": "s2", "location": "courtyard", "start": "2026-11-06T16:05:00+05:30", "end": "2026-11-06T16:15:00+05:30", "setup_min": 5, "wrap_min": 5, "people": ["maya", "dev", "leela"], "shots": ["two-shot"], "capabilities": ["sound_recorder"], "script_rev": 1, "constraints_rev": 3, "requires_light": true }
+]
+```
+
 - Copy `job_id`, `script_rev`, `constraints_rev` and `addressed_to` from the job, and put the same revisions inside every manifest.
+- Kit: only list capabilities whose status in the constraints is `confirmed`. If a needed item is unavailable, propose a reviewed alternative from the constraints (for example a lav mic) or a later slot, never kit marked `unavailable` or `unknown`.
 - Times are full ISO timestamps with `+05:30`. `end` is after `start`. Setup happens before `start`; wrap happens after `end`.
 - `people`, `shots` and `capabilities` use the IDs from the constraints. Shot types: `wide`, `two-shot`, `medium`, `close-up`, `over-shoulder`, `insert`.
 - Set `requires_light: true` when the shot needs daylight; the checker then compares it with the location's `light_until`.

@@ -1,36 +1,73 @@
 # Take Two
 
-**Shoot plans change. Take Two makes sure everyone is on the same one.**
+**Shoot plans change all day. Take Two keeps the whole crew on one current, checked plan.**
 
-Take Two is a production room built on [Switch](https://github.com/sandbox-quantum/switch) for small crews and creator teams: short films, YouTube teams, small brand shoots, wedding and event videographers, student films.
+Take Two is a production room built on [Switch](https://github.com/sandbox-quantum/switch) for small film crews and creator teams. When something changes on a shoot day (a location is refused, an actor is late, the sound recorder dies, a scene runs over), it holds what is affected, asks two AI agents for new plans, checks every plan against the facts in code, lets the director choose in Switch, and releases one new versioned plan that each affected crew member confirms.
 
-When something changes (a location falls through, an actor has to leave early, a client changes the brief), the room:
+Built for **Flip the Switch** (4–7 Nov 2026), **Track 02: Personal or Creative Workflow**.
 
-1. **puts the old plan on hold** straight away, so nobody acts on it;
-2. **sends the problem to the right agents by role:** the Script Supervisor (story) and the 1st AD (schedule);
-3. **checks every option** against the facts it knows: who is free when, which locations are allowed when, travel, hard stops;
-4. **asks the right human to decide,** with short sketch previews for creative choices and plain text for simple logistics;
-5. **releases one new plan** to the crew's chat, and tracks who has confirmed *that* version.
+![How Take Two works](docs/explainer/how-it-works.png)
 
-> A consequential human decision reaches everyone as one consistent, current plan, and anyone who hasn't seen it is visible.
+## How Switch is used
+Take Two cannot run without Switch. Every person, agent and message goes through it:
 
-Built for the **Flip the Switch** hackathon (4–7 Nov 2026), **Track 02: creative workflows**.
-
-## Status
-Planning only. Per the event rules, no code is written before **4 Nov 2026, 00:01 IST**.
-
-## Docs
-| File | What it covers |
+| Switch feature | What Take Two does with it |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Tech stack, rooms, the change loop, release states, data model, repo layout |
-| [docs/AGENTS.md](docs/AGENTS.md) | The two reasoning agents, the coordinator, and the humans who decide |
-| [docs/FLOW.md](docs/FLOW.md) | Step-by-step walkthrough of one change, end to end |
-| [docs/PLAN.md](docs/PLAN.md) | Day-by-day build plan for 4–7 Nov with an exit test per day |
-| [docs/DEMO.md](docs/DEMO.md) | The 2:30 demo video script and the real shoot on 6 Nov |
-| [docs/RISKS.md](docs/RISKS.md) | Risks, the day-1 abandonment test, and the fallback |
-| [docs/SWITCH-NOTES.md](docs/SWITCH-NOTES.md) | The Switch primitives we rely on, checked against the source |
-| [docs/RESEARCH.md](docs/RESEARCH.md) | Evidence that shoot plans really change, and what is not verified |
-| [debate/](debate/) | How the idea was chosen: three rounds of Claude vs Sol |
+| **Custom agent registration** (`POST /agents`, WebSocket connection) | The coordinator is a registered Switch agent with its own identity; it reads the rooms and posts holds, releases and corrections. |
+| **Rooms + bridges** | The `#production` room (Mattermost) holds the producer, AD and director with the agents. The crew rooms (`#crew`, `#day-1`) live on Discord through Switch's Discord bridge. |
+| **Sender identity** | Every message carries its sender's account. The coordinator's authority table decides who may change what (only the producer can change a location permission; only the director's answer counts). |
+| **Exclusive agent roles** (`assume_role`) | Two separate agent identities hold the `script-supervisor` and `first-ad` roles; jobs are addressed to the role. |
+| **Native question cards** (session approvals) | The director chooses between checked plans on a Switch question card. A card asked on old facts is closed as outdated. |
+| **Room documents** | `script-r1` and `constraints-rN` are versioned room documents the agents read. |
+| **Media uploads** | Each option's set-model clip and each release's call sheet are uploaded to the room through Switch. |
 
-## What Take Two does not do
-It doesn't scout locations, carry spare batteries or replace a good AD. It doesn't parse arbitrary screenplays or handle budgets, payroll or permits. Its one job is keeping the human's decision and the crew's plan in sync.
+## Agents connected
+| Agent | Runs as | Job |
+|---|---|---|
+| **Script supervisor** | Claude Code, managed by Switch Console | Says what each scene must keep for the story ("the confession stays private"). |
+| **First AD** | Codex, managed by Switch Console | Drafts up to three concrete plans: location, time, cast, shots, kit. |
+| **Coordinator** | Python (this repo), registered as a Switch custom agent | Records changes, holds scenes, sends jobs, runs the checker, opens the decision, releases, tracks confirmations. No LLM. |
+
+The agents only propose. A deterministic checker (`coordinator/checker.py`) tests permissions and windows, daylight, hard stops, availability, cast, kit and travel; a plan that fails never reaches the director. A person always decides.
+
+## How the rooms are set up
+- `#production` (Mattermost, from the Switch local server): producer, AD, director, both agents and the coordinator.
+- `#crew` and `#day-1` (Discord, through the Switch Discord bridge): the cast and crew.
+- Step-by-step setup (Discord bot, Console agents): [docs/SETUP-HUMAN.md](docs/SETUP-HUMAN.md). Agent instructions: [agents/](agents/).
+
+## Run it
+See **[QUICKSTART.md](QUICKSTART.md)** for both paths:
+1. **Replay a recorded shoot day** (Node only, about 5 minutes): the dashboard replays 23 real snapshots of a day where four things go wrong.
+2. **The real loop on your own Switch** (Docker + Switch, no Discord or agent subscriptions needed): `scripts/demo_day.py` runs the day against the real Switch server with simulated people and workers.
+
+Tests: `uv run pytest -q` (Python 3.12).
+
+## What happens in the demo day
+| Change | Who reports it | Result |
+|---|---|---|
+| Rooftop permission refused | Producer | Scene 3 held, re-planned to the stairwell; release 2 |
+| Dev is 40 minutes late | AD | Scenes 1–2 held, one plan moves both; release 3 |
+| Sound recorder dies | AD / camera | All scenes held; plan uses the confirmed lav mic; release 4 |
+| Scene 1 runs 25 minutes over | AD / script supervisor | Scene 2 slides; release 5 |
+
+Each release is versioned and fingerprinted; a reply about an old release is caught and corrected in chat.
+
+## Repo map
+| Path | What it is |
+|---|---|
+| `coordinator/` | The Switch agent: loop, checker, ledger, releases, Switch client (Python, FastAPI) |
+| `ui/` | The Control Room dashboard (React, Vite); set models drawn with the Anatomy kit |
+| `render/` | Remotion renderer for set-model preview clips and call sheets |
+| `agents/` | Role instructions for the two Console agents |
+| `scripts/` | Real-Switch rehearsals (`demo_day.py`, `demo_dry_run.py`), reset and seed tools |
+| `fixtures/` | The film, its facts and the recorded dashboard snapshots |
+| `docs/` | Architecture, flow, agents, setup, the explainer |
+
+## Honest limits
+- The recorded day uses **simulated people and simulated agents** talking through the real Switch server. Real Console agents and the Discord bridge are set up separately ([docs/SETUP-HUMAN.md](docs/SETUP-HUMAN.md)).
+- "Published" means Switch accepted the message for relay, not that a crew member's phone showed it.
+- Set models show where people and the camera are, not what the shot will look like.
+- Take Two doesn't scout locations, handle budgets or permits, or parse arbitrary screenplays.
+
+## Credits and licences
+Switch is Apache 2.0 with a modified Commons Clause (see `coordinator/SWITCH-LICENSE.txt`). The schedule board adapts Subframe's MIT "schedule ripple"; set models use the MIT Anatomy kit (`ui/src/sets/kit/LICENSE`).

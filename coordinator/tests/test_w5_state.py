@@ -18,7 +18,7 @@ async def test_decision_change_release_and_roles_have_trusted_names(tmp_path: Pa
         await change(rt.loop)
         state = rt.ledger.snapshot_state()
         assert state['changes'][0]['reporter_name'] == 'Nila'
-        assert any(t['text'].startswith('Nila (producer):') for t in state['timeline'])
+        assert any(t['text'].startswith('Nila (Producer):') for t in state['timeline'])
         assert not any('@switch-' in t['text'] for t in state['timeline'])
     finally:
         await rt.close()

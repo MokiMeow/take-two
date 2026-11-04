@@ -49,7 +49,7 @@ async def test_w4_chatter_never_becomes_report_but_maya_does_once(tmp_path: Path
         assert state['changes'][0]['reporter_name'] == 'Maya'
         assert state['changes'][0]['status'] == 'pending_confirmation'
         assert [t['text'] for t in state['timeline'] if 'reported a change' in t['text']] == [
-            'Maya (actor) reported a change; structured confirmation is required.']
+            'Maya (Actor) reported a change; structured confirmation is required.']
     finally:
         await rt.close()
 
@@ -70,7 +70,7 @@ async def test_known_authority_report_uses_configured_name_not_message_name(tmp_
         await rt.accept_frame(chat('@nila:localhost', 'The location contact has changed.', 1, sender_name='Evil name'))
         state = rt.ledger.snapshot_state()
         assert state['changes'][0]['reporter_name'] == 'Nila'
-        assert state['timeline'][0]['text'].startswith('Nila (producer) reported')
+        assert state['timeline'][0]['text'].startswith('Nila (Producer) reported')
     finally:
         await rt.close()
 

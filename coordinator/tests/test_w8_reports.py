@@ -38,7 +38,7 @@ async def test_report_record_card_uses_authority_change_path_once_across_restart
     job = await report(rt)
     assert await extract(rt, job)
     q = proposal(rt)
-    assert 'person maya hard_stop 18:00' in q['prompt']
+    assert "Record Maya: hard stop 18:00?" in q['prompt']
     assert q['authorized_answerers'] == ['ad']
     assert rt.loop.constraints.constraints_rev == 1
     assert await rt.loop.handle_outcome(outcome(q, 'ad', 'record'))
@@ -46,10 +46,16 @@ async def test_report_record_card_uses_authority_change_path_once_across_restart
     assert rt.loop.constraints.constraints_rev == 2
     assert rt.ledger.snapshot_state()['changes'][0]['reporter'] == 'ad'
     assert rt.ledger.snapshot_state()['changes'][1]['resolution'] == 'recorded'
+    recorded, source = rt.ledger.snapshot_state()['changes'][:2]
+    assert source['status'] == 'pending_confirmation'
+    assert source['resolved_by_change'] == recorded['id']
+    assert source['resolved_at'] == recorded['recorded_at']
+    resolved = dict(source)
     await rt.close()
     rt = runtime(tmp_path)
     assert not await rt.loop.handle_outcome(outcome(q, 'ad', 'record'))
     assert rt.loop.constraints.constraints_rev == 2
+    assert rt.ledger.snapshot_state()['changes'][1] == resolved
     await rt.close()
 
 
@@ -86,7 +92,10 @@ async def test_ignore_and_wrong_authority_never_record(tmp_path: Path) -> None:
     assert not await rt.loop.handle_outcome(outcome(q, 'director', 'record'))
     q = proposal(rt)
     assert await rt.loop.handle_outcome(outcome(q, 'ad', 'ignore'))
-    assert rt.ledger.snapshot_state()['changes'][0]['resolution'] == 'dismissed'
+    source = rt.ledger.snapshot_state()['changes'][0]
+    assert source['resolution'] == 'ignored'
+    assert source['resolved_at'].endswith('+05:30')
+    assert not source.get('resolved_by_change')
     assert rt.loop.constraints.constraints_rev == 1
     await rt.close()
 

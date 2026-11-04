@@ -2,7 +2,8 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Callable
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -83,11 +84,28 @@ async def test_catchup_deadline_blocks_late_fence_and_outcome(tmp_path: Path) ->
         await rt.close()
 
 
-async def test_catchup_outcome_fetch_cannot_overrun_deadline(tmp_path: Path) -> None:
+@pytest.fixture
+def catchup_timer(monkeypatch: pytest.MonkeyPatch) -> Callable[[], None]:
+    """Advance logical time and cancel on the next loop turn, without sleeping."""
+    clock = SimpleNamespace(now=100.0, timer=None)
+    def timeout_at(deadline: float) -> asyncio.Timeout:
+        assert deadline == 145.0
+        clock.timer = asyncio.timeout(None)
+        return clock.timer
+    def expire() -> None:
+        clock.now = 145.0
+        clock.timer.reschedule(0)
+    monkeypatch.setattr('coordinator.recovery.asyncio', SimpleNamespace(
+        get_running_loop=lambda: SimpleNamespace(time=lambda: clock.now), timeout_at=timeout_at))
+    return expire
+
+
+async def test_catchup_outcome_fetch_cannot_overrun_deadline(tmp_path: Path, catchup_timer: Callable[[], None]) -> None:
     rt = runtime_for(tmp_path, switch_production_room_id='production')
     cancelled = asyncio.Event()
     async def outcomes() -> list[Any]:
         try:
+            catchup_timer()
             await asyncio.Event().wait()
         finally:
             cancelled.set()
@@ -96,9 +114,9 @@ async def test_catchup_outcome_fetch_cannot_overrun_deadline(tmp_path: Path) -> 
     rt.catching_up = True
     rt.catchup_through = '2026-11-04T10:00:00+05:30'
     rt.replay_fence = {'s': 0}
-    rt.catchup_deadline = asyncio.get_running_loop().time() + 0.01
+    rt.catchup_deadline = 145.0
     try:
-        await asyncio.wait_for(rt.finish_catchup(), 0.2)
+        await rt.finish_catchup()
         assert cancelled.is_set()
         assert not rt.ready
         assert any('45 seconds' in t['text'] for t in rt.ledger.snapshot_state()['timeline'])
@@ -106,11 +124,12 @@ async def test_catchup_outcome_fetch_cannot_overrun_deadline(tmp_path: Path) -> 
         await rt.close()
 
 
-async def test_catchup_outcome_processing_cannot_overrun_deadline(tmp_path: Path) -> None:
+async def test_catchup_outcome_processing_cannot_overrun_deadline(tmp_path: Path, catchup_timer: Callable[[], None]) -> None:
     rt = runtime_for(tmp_path, switch_production_room_id='production')
     async def outcomes() -> list[Any]:
         return [dict(request_id='request')]
     async def handle(outcome: Any) -> bool:
+        catchup_timer()
         await asyncio.Event().wait()
         return True
     rt.client.get_outcomes = outcomes
@@ -118,9 +137,9 @@ async def test_catchup_outcome_processing_cannot_overrun_deadline(tmp_path: Path
     rt.catching_up = True
     rt.catchup_through = '2026-11-04T10:00:00+05:30'
     rt.replay_fence = {'s': 0}
-    rt.catchup_deadline = asyncio.get_running_loop().time() + 0.01
+    rt.catchup_deadline = 145.0
     try:
-        await asyncio.wait_for(rt.finish_catchup(), 0.2)
+        await rt.finish_catchup()
         assert not rt.ready
         assert any('45 seconds' in t['text'] for t in rt.ledger.snapshot_state()['timeline'])
     finally:

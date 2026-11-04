@@ -82,7 +82,16 @@ class Change(ChangeCommand):
     status: ChangeStatus
     source: Literal["mattermost", "discord", "control_room"]
     constraints_rev: Positive | None = None
-    resolution: Literal['recorded', 'dismissed'] | None = None
+    resolution: Literal['recorded', 'ignored', 'superseded'] | None = None
+    resolved_by_change: NonEmpty | None = None
+    resolved_at: Timestamp | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def legacy_ignored_report(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get('resolution') == 'dismissed':
+            return dict(value, resolution='ignored')
+        return value
 
 
 class ChangeResponse(WireModel):

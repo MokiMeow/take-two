@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import Field
 
-from coordinator.presentation import person_label
+from coordinator.presentation import person_label, change_label
 from coordinator.ui_models import ChangeCommand, Entity, NonEmpty
 from coordinator.workflow_models import Reply, apply_change, workflow_transaction
 
@@ -154,7 +154,7 @@ class ReportTransitions:
             self._save(state)
             return False
         name = self.identity_names.get(command.reporter, 'Crew member')
-        prompt = f"{name} says: '{job['context']['message']}'. Record `{command.entity} {command.target} {command.field} {command.value}`?"
+        prompt = f"{name} says: '{job['context']['message']}'. Record {change_label(command, self.metadata)}?"
         room = getattr(self.switch, 'production_room_id', None) or 'production'
         self._card(state, dict(kind='proposal', title=f'{name} · proposed change', prompt=prompt,
             options=[dict(id='record', label='Record'), dict(id='ignore', label='Ignore')],
@@ -169,7 +169,7 @@ class ReportTransitions:
             self._event(state, 'stale_reply', 'Proposal report is no longer pending.', q['request_id'])
             return False
         if outcome.get('candidate_id') == 'ignore':
-            report['resolution'] = 'dismissed'
+            report.update(resolution='ignored', resolved_at=self._stamp())
             self._event(state, 'decision', 'Authority dismissed the proposed change; facts unchanged.', q['report_id'])
             return True
         if outcome.get('candidate_id') != 'record':
@@ -179,6 +179,8 @@ class ReportTransitions:
         command = ChangeCommand.model_validate(dict(q['command'], reporter=outcome['answered_by']))
         result = self._record_change(command, source=report['source'], source_message_id='proposal:' + q['report_id'], state=state)
         if result.status == 'recorded':
-            report['resolution'] = 'recorded'
+            recorded = next(c for c in state['changes'] if c['id'] == result.change_id)
+            report.update(resolution='recorded', resolved_by_change=result.change_id,
+                resolved_at=recorded['recorded_at'])
             return True
         return False

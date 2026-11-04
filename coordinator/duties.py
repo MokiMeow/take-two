@@ -2,6 +2,7 @@
 from typing import Any
 
 from coordinator.render_props import call_times, hhmm
+from coordinator.presentation import kit_label, role_label
 
 
 def duties(manifest: dict[str, Any], person: dict[str, Any]) -> dict[str, Any]:
@@ -36,7 +37,11 @@ def differences(current: dict[str, Any], baseline: dict[str, Any] | None,
         if b is None:
             lines.append(f'{prefix}: no longer assigned')
         elif a is None:
-            lines.append(f"{prefix}: {b['location']}, {hhmm(b['start']) if b['start'] else 'held'}–{hhmm(b['end']) if b['end'] else 'held'}; {b['role']}; kit {', '.join(b['kit']) or 'none'}")
+            parts = [f"{prefix}: {b['location'].replace('_', ' ').title()}, {hhmm(b['start']) if b['start'] else 'held'}–{hhmm(b['end']) if b['end'] else 'held'}",
+                person.get('role_label') or role_label(b['role'])]
+            if b['kit']:
+                parts.append('kit ' + ', '.join(kit_label(k, metadata) for k in b['kit']))
+            lines.append('; '.join(parts))
         else:
             for key, label in (('location', ''), ('start', 'start '), ('end', 'end '),
                     ('role', 'role '), ('kit', 'kit '), ('coverage', 'coverage '),
@@ -45,11 +50,25 @@ def differences(current: dict[str, Any], baseline: dict[str, Any] | None,
                     def display(value: Any) -> str:
                         if key in ('start', 'end') and value:
                             return hhmm(value)
-                        return ', '.join(value) or 'none' if isinstance(value, list) else str(value or 'none')
+                        if key == 'location':
+                            return value.replace('_', ' ').title()
+                        if key == 'role':
+                            member = person if value == b['role'] else (prior_person or person)
+                            return member.get('role_label') or role_label(value)
+                        if isinstance(value, list):
+                            return ', '.join(kit_label(v, metadata) if key == 'kit' else v.replace('_', ' ') for v in value)
+                        return str(value if value is not None else 'none')
+                    if key == 'kit' and (not a[key] or not b[key]):
+                        action = 'added' if b[key] else 'removed'
+                        lines.append(f'{prefix}: kit {action} {display(b[key] or a[key])}')
+                        continue
                     lines.append(f'{prefix}: {label}{display(a[key])} → {display(b[key])}')
     call = hhmm(new['call']) if new['call'] else 'held'
-    prior = hhmm(old['call']) if old['call'] else 'unconfirmed'
-    lines.append(f'Call {call} (was {prior})')
+    if baseline is None:
+        lines.append(f'Call {call}')
+    elif new['call'] != old['call']:
+        prior = hhmm(old['call']) if old['call'] else 'held'
+        lines.append(f'Call {call} (was {prior})')
     return [line[:500] for line in lines]
 
 

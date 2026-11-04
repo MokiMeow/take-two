@@ -170,6 +170,11 @@ async def main(*, light_only: bool=False) -> None:
                 async def recorded_proposal() -> bool:
                     return runtime.loop.workflow['cards'][q['request_id']]['status']=='answered'
                 await wait_for(recorded_proposal,timeout=30,label='authority record')
+                current=await state()
+                report=next(c for c in current['changes'] if c['id']==q['report_id'])
+                recorded=next(c for c in current['changes'] if c['id']==report['resolved_by_change'])
+                assert report['resolution']=='recorded' and recorded['status']=='recorded'
+                assert report['resolved_at']==recorded['recorded_at']
             async def confirmations(number: int) -> None:
                 release=(await state())['releases'][0]
                 for person in release['acks']['expected']:
@@ -202,6 +207,9 @@ async def main(*, light_only: bool=False) -> None:
                 if name=='late-actor':
                     q=await wait_for(lambda:open_card('duty','dev'),timeout=30,label='Dev duty card')
                     await answer_card(q,'dev',2,'Running 40 min late')
+                    async def report_received() -> bool:
+                        return any(c['id']=='duty-report:'+q['request_id'] for c in (await state())['changes'])
+                    await wait_for(report_received,timeout=30,label='Dev pending report')
                     await capture('dev-cannot-make-it')
                     await record_proposal()
                 else:
@@ -234,6 +242,10 @@ async def main(*, light_only: bool=False) -> None:
                 assert all(s['validity']=='valid' for s in current['scenes'])
             assert sum(c['status']=='recorded' for c in current['changes'])==len(scenarios)+(0 if light_only else 1)
             assert [r['number'] for r in current['releases']]==list(range(len(scenarios)+1,0,-1))
+            assert not [c for c in current['changes'] if c['status']=='pending_confirmation' and not c.get('resolution')]
+            for release in current['releases']:
+                for lines in release['duty_changes'].values():
+                    assert not any(token in line for line in lines for token in ('camera_sound','sound_recorder','kit none','was unconfirmed'))
             results=[dict(number=b.number,name=b.name,result=normalized(b.state)) for b in beats]
             # Worker statuses at record/hold can race network delivery, so compare
             # those beats by the committed facts/holds; decision/release beats retain jobs.

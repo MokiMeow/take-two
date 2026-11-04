@@ -7,7 +7,7 @@ import json
 import hashlib
 from pathlib import Path
 import re
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 import yaml
@@ -61,6 +61,8 @@ class Crew(BaseModel):
     production_id: str
     crew: list[CrewPerson] = Field(max_length=30)
     humans: list[CrewPerson] = Field(default_factory=list, max_length=30)
+    kit_labels: dict[Annotated[str, Field(min_length=1, max_length=64)],
+                     Annotated[str, Field(min_length=1, max_length=80)]] = Field(default_factory=dict, max_length=30)
 
 
 class ChatPayload(BaseModel):
@@ -128,7 +130,7 @@ class Runtime(Recovery, DayRooms):
         metadata = dict(production=dict(title=script.title,day=f'Day {script.shoot_day_number}',
             date=f"{datetime.fromisoformat(script.shoot_day):%A} {datetime.fromisoformat(script.shoot_day).day} {datetime.fromisoformat(script.shoot_day):%B %Y}",
             timezone=script.timezone),scenes=[s.model_dump() for s in script.scenes],
-            crew=[p.model_dump(exclude={'switch_identity'}) for p in crew.crew])
+            crew=[p.model_dump(exclude={'switch_identity'}) for p in crew.crew], kit_labels=crew.kit_labels)
         self.loop = Loop(self.ledger, None, facts, renderer=self.renderer,
             authorities={'creative': [settings.take_two_director_id] if settings.take_two_director_id else [],
                          'location_permission': [settings.take_two_producer_id] if settings.take_two_producer_id else [],

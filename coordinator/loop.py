@@ -19,8 +19,7 @@ from coordinator.constraints import Constraints, Manifest
 from coordinator.ui_models import ChangeCommand, ChangeResponse, State
 from coordinator.workflow_models import ADReply, SupervisorReply, visible_candidate, normalize_outcome, note_constraints, workflow_transaction
 from coordinator.switch_models import Question, QuestionOption, QuestionPayload
-from coordinator.render_props import hhmm
-from coordinator.presentation import person_name
+from coordinator.presentation import person_name, scene_details
 
 IST = ZoneInfo('Asia/Kolkata')
 
@@ -281,9 +280,9 @@ class Loop(ReportTransitions, ChangeTransitions, CardTransitions, ReleaseTransit
         presentations = []
         for index,c in enumerate(passing):
             m = c['manifest']
-            summary = f"{chr(65+index)} · {c['label']} · checked pass · {m['location']} {hhmm(m['start'])}–{hhmm(m['end'])}; people: {', '.join(m['people'])}; shots: {', '.join(m['shots'])}. {c['story_cost']} Hash {c['manifest_hash']}"
+            summary = f"{chr(65+index)} · {c['label']} · checked pass · {scene_details(m, self.metadata)}. {c['story_cost']} Hash {c['manifest_hash']}"
             if c.get('manifests'):
-                summary += '\nComplete schedule: '+'; '.join(f"Scene {next(s['number'] for s in self.metadata['scenes'] if s['id']==row['scene_id'])}: {row['location']} {hhmm(row['start'])}–{hhmm(row['end'])}; setup {row['setup_min']}m, wrap {row['wrap_min']}m; people {', '.join(row['people'])}; shots {', '.join(row['shots'])}; kit {', '.join(row['capabilities'])}" for row in c['manifests'])
+                summary += '\nComplete schedule: '+'; '.join(f"Scene {next(s['number'] for s in self.metadata['scenes'] if s['id']==row['scene_id'])}: {scene_details(row, self.metadata)}" for row in c['manifests'])
             presentations.append(dict(candidate_id=c['candidate_id'],preview_url=c.get('preview_url'),summary=summary,
                 preview_required=not (c.get('manifests') and not state['releases'])))
             option = payload['questions'][0]['options'][index]

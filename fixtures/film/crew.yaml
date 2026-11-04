@@ -1,6 +1,11 @@
 production_id: take-two-demo
 confirmation_policy: affected_only
 ack_deadline_min: 15
+kit_labels:
+  sound_recorder: sound recorder
+  lav: lav mic
+  gimbal: gimbal
+  second_camera: second camera
 humans:
   - id: arun
     name: Arun

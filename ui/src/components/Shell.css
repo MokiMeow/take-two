@@ -243,3 +243,16 @@
   .btn { padding: 0 10px; }
 }
 .replay-pos { min-width: 150px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); color: var(--ink); text-align: center; }
+
+/* Film mode (?film): no controls on screen, just the room. */
+.app[data-film] .replay,
+.app[data-film] .top-actions .btn { display: none; }
+
+/* Headline left, the day's numbers right. */
+.lead { grid-template-columns: minmax(0, 1fr) auto; column-gap: 32px; }
+.lead .beats { grid-column: 1 / -1; }
+.counters { display: flex; gap: 36px; margin: 0; align-self: start; padding-top: 6px; }
+.counters div { display: grid; gap: 2px; justify-items: end; }
+.counters dt { font: 10.5px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
+.counters dd { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+@media (max-width: 1080px) { .counters { display: none; } }

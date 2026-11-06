@@ -104,7 +104,7 @@ class CardTransitions:
         if q['kind'] == 'proposal':
             return self._proposal_outcome(state, q, outcome)
         if choice == 'confirm':
-            return self._confirm(state, q['person'], q['release_id'])
+            return self._confirm(state, q['person'], q['release_id'], self.destination_platforms.get(q['payload']['room_id']))
         if choice == 'cannot':
             self._pending_duty_report(state, q, outcome)
             return True
@@ -138,13 +138,13 @@ class CardTransitions:
             if q['status'] == 'open' and now >= datetime.fromisoformat(q['expires_at']):
                 self._expire_card(state, q)
 
-    def _confirm(self, state: dict[str, Any], person: str, release_id: str) -> bool:
+    def _confirm(self, state: dict[str, Any], person: str, release_id: str, source: str | None = None) -> bool:
         current = state['releases'][0] if state['releases'] else None
         if not current or self.workflow.get('unresolved') or person not in {c['id'] for c in state['crew']} or current['release_id'] != release_id or current['status'] != 'published':
             self._event(state, 'stale_reply', 'Confirmation does not identify the current published release.', release_id)
             return False
         if person in current['acks']['expected'] and person not in {a['person'] for a in current['acks']['confirmed']}:
-            current['acks']['confirmed'].append(dict(person=person, at=self._stamp()))
+            current['acks']['confirmed'].append(dict(person=person, at=self._stamp(), **({'source': source} if source in ('mattermost', 'discord') else {})))
             self.workflow.setdefault('confirmed_releases', {})[person] = release_id
             for member in state['crew']:
                 if member['id'] == person:
@@ -155,10 +155,10 @@ class CardTransitions:
                 self._close_card(q, 'answered')
         return True
 
-    async def confirm(self, person: str, release_id: str) -> bool:
+    async def confirm(self, person: str, release_id: str, source: str | None = None) -> bool:
         async with self.lock:
             state = self._state()
             with workflow_transaction(self):
-                result = self._confirm(state, person, release_id)
+                result = self._confirm(state, person, release_id, source)
                 self._save(state)
                 return result

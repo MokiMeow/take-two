@@ -165,6 +165,8 @@ class Publication(WireModel):
 class Confirmation(WireModel):
     person: NonEmpty
     at: Timestamp
+    # Where the confirmation arrived through Switch, when known.
+    source: Literal['mattermost', 'discord'] | None = None
 
 
 class Acks(WireModel):

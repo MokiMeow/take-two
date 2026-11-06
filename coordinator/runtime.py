@@ -244,6 +244,9 @@ class Runtime(Recovery, DayRooms):
                     break
                 if frame.event == 'connection_state':
                     await self.connected()
+                elif frame.event == 'subscription_changed' and asyncio.get_running_loop().time() < getattr(self, 'subscription_grace', 0.0):
+                    # Expected: the coordinator itself just joined the Discord day room.
+                    continue
                 elif frame.event in ('gap', 'evicted', 'subscription_changed'):
                     self.ready = False
                     self.notice('Switch history needs reconciliation; releases paused. Review history before restarting.', visible=False)
@@ -326,7 +329,7 @@ class Runtime(Recovery, DayRooms):
         crew_person = self.crew_ids.get(message.sender)
         confirmation = re.fullmatch(r'confirm\s+(r[1-9][0-9]{0,5})', message.body.strip(), re.IGNORECASE)
         if crew_person and confirmation:
-            if not await self.loop.confirm(crew_person, confirmation[1].lower()):
+            if not await self.loop.confirm(crew_person, confirmation[1].lower(), ('mattermost' if event.room_id == self.settings.switch_production_room_id else self.loop.destination_platforms.get(event.room_id, 'discord'))):
                 await self.correct_stale_reply(event, confirmation[1].lower())
             return
         if crew_person:

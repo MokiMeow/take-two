@@ -88,6 +88,7 @@ export function Lead({ state }: { state: State }) {
           </motion.p>
         </AnimatePresence>
       </div>
+      <Counters state={state} />
       {b && (
         <ol className="beats" aria-label="Progress of the latest change">
           {BEATS.map((name, i) => {
@@ -103,6 +104,31 @@ export function Lead({ state }: { state: State }) {
         </ol>
       )}
     </section>
+  );
+}
+
+// The day so far, in three numbers.
+function Counters({ state }: { state: State }) {
+  const recorded = state.changes.filter((c) => c.status === "recorded").length;
+  const r = state.releases.find((x) => x.status === "published") ?? state.releases[0];
+  const confirmed = r ? r.acks.confirmed.length : 0;
+  const expected = r ? r.acks.expected.length : 0;
+  const items = [
+    { k: "Changes today", v: String(recorded) },
+    { k: "Current release", v: r ? `r${r.number}` : "—" },
+    { k: "Confirmed", v: r ? `${confirmed}/${expected || state.crew.length}` : "—" },
+  ];
+  return (
+    <dl className="counters">
+      {items.map((i) => (
+        <div key={i.k}>
+          <dt>{i.k}</dt>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.dd key={i.v} initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -10, filter: "blur(4px)" }} transition={{ duration: 0.35, ease: EASE }}>{i.v}</motion.dd>
+          </AnimatePresence>
+        </div>
+      ))}
+    </dl>
   );
 }
 

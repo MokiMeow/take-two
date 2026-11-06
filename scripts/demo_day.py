@@ -9,6 +9,7 @@ import argparse
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -114,7 +115,10 @@ async def main(*, light_only: bool=False) -> None:
             take_two_director_id=senders['director'],take_two_producer_id=senders['producer'],take_two_ad_id=senders['ad-human'],
             take_two_supervisor_sender_id=senders['w8-supervisor'],take_two_ad_sender_id=senders['w8-first-ad'],
             take_two_supervisor_agent_name='w8-supervisor',take_two_ad_agent_name='w8-first-ad',
-            take_two_crew_identities={senders[role]:role for role in ('maya','dev','leela')})
+            take_two_crew_identities={senders[role]:role for role in ('maya','dev','leela')},
+            # Optional Discord crew room: set TAKE_TWO_DISCORD_BRIDGE and the three day usernames.
+            **{k:os.environ[k.upper()] for k in ('take_two_discord_bridge','take_two_day_actor',
+                'take_two_day_camera','take_two_day_sound') if os.environ.get(k.upper())})
         (DIRECTORY/'settings.json').write_text(settings.model_dump_json(exclude={'switch_registration_key'}),encoding='utf-8',newline='\n')
         runtime=Runtime(settings)
         await runtime.start()
@@ -142,7 +146,7 @@ async def main(*, light_only: bool=False) -> None:
                 return current
             async def ready() -> bool:
                 return runtime.ready and server.started
-            await wait_for(ready,timeout=60,label='day readiness')
+            await wait_for(ready,timeout=240,label='day readiness')
             for stream,role in zip(streams,('script-supervisor','first-ad'),strict=True):
                 await stream.claim_role(role,room)
             async def decision(rev: int) -> dict[str,Any] | None:

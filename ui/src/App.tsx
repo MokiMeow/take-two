@@ -1,11 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MotionConfig } from "motion/react";
-import { fixtures, useProductionState } from "./data";
+import { fixtures, useProductionState, type Source } from "./data";
 import type { ScenePlan, State } from "./types";
 import { Schedule } from "./components/Schedule";
+import { SwitchFeed, SwitchGraph, useSwitchTraffic } from "./components/SwitchMap";
+import { dayWindow } from "./story";
 import { CrewCard, DecisionCard, PendingCard, ReleaseCard } from "./components/Side";
 import { History, Lead, ReportDialog, SheetDialog, TopBar } from "./components/Shell";
 import "./App.css";
+
+// One hour window for the whole day. A replay knows every moment up front; live, it only grows.
+function useDayWindow(state: State | null, replay: boolean) {
+  const all = useMemo(() => {
+    if (!replay || !fixtures.length) return null;
+    const ws = fixtures.map((f) => dayWindow(f.state));
+    return { from: Math.min(...ws.map((w) => w.from)), to: Math.max(...ws.map((w) => w.to)) };
+  }, [replay]);
+  const grown = useRef<{ from: number; to: number } | null>(null);
+  if (all) return all;
+  if (state) {
+    const w = dayWindow(state);
+    const g = grown.current;
+    grown.current = g ? { from: Math.min(g.from, w.from), to: Math.max(g.to, w.to) } : w;
+  }
+  return grown.current ?? undefined;
+}
 
 // Where each scene was in the previous state, for the dashed "was here" outline.
 function useGhosts(state: State | null): Record<string, ScenePlan> {
@@ -28,6 +47,8 @@ function useGhosts(state: State | null): Record<string, ScenePlan> {
 export default function App() {
   const { state, source, setFixture } = useProductionState();
   const ghosts = useGhosts(state);
+  const win = useDayWindow(state, source.kind === "fixture");
+  const film = new URLSearchParams(location.search).has("film");
   const [focus, setFocus] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
   const [report, setReport] = useState(false);
@@ -50,21 +71,33 @@ export default function App() {
   if (!state) {
     return <div className="boot"><span className="boot-dot" /> Connecting to the coordinator</div>;
   }
+  return <Room state={state} source={source} setFixture={setFixture} ghosts={ghosts} win={win} film={film}
+    focus={focus} setFocus={setFocus} history={history} setHistory={setHistory} report={report} setReport={setReport} sheet={sheet} setSheet={setSheet} />;
+}
 
+function Room({ state, source, setFixture, ghosts, win, film, focus, setFocus, history, setHistory, report, setReport, sheet, setSheet }: {
+  state: State; source: Source; setFixture: (i: number) => void; ghosts: Record<string, ScenePlan>;
+  win: { from: number; to: number } | undefined; film: boolean; focus: string | null; setFocus: (f: string | null) => void;
+  history: boolean; setHistory: (b: boolean) => void; report: boolean; setReport: (b: boolean) => void;
+  sheet: string | null; setSheet: (s: string | null) => void;
+}) {
+  const traffic = useSwitchTraffic(state);
   return (
     <MotionConfig reducedMotion="user">
-      <div className="app">
+      <div className="app" data-film={film || undefined}>
         <TopBar state={state} source={source} setFixture={setFixture} onHistory={() => setHistory(true)} onReport={() => setReport(true)} />
         <Lead state={state} />
         <main className="layout">
           <div className="main-col">
-            <Schedule state={state} ghosts={ghosts} focus={focus} onFocus={setFocus} />
+            <Schedule state={state} ghosts={ghosts} focus={focus} onFocus={setFocus} window={win ?? undefined} />
             <CrewCard state={state} />
+            <SwitchGraph traffic={traffic} />
           </div>
           <aside className="side">
             <PendingCard state={state} />
             <DecisionCard state={state} focus={focus} onFocus={setFocus} />
             {!(state.decision && ["open", "closed_outdated"].includes(state.decision.status)) && <ReleaseCard state={state} onSheet={setSheet} />}
+            <SwitchFeed traffic={traffic} />
           </aside>
         </main>
       </div>

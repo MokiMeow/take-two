@@ -106,7 +106,7 @@ export interface Release {
   publications: { room: string; room_name?: string; platform: "discord" | "mattermost"; status: PublicationStatus }[];
   acks: {
     expected: string[];
-    confirmed: { person: string; at: string }[];
+    confirmed: { person: string; at: string; source?: "mattermost" | "discord" }[];
     policy: "affected_only" | "everyone";
   };
 }

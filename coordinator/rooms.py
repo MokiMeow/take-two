@@ -1,4 +1,5 @@
 """Idempotent shoot-day provisioning; a missing Discord bridge is explicit."""
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,7 @@ class DayRooms:
                     raise ValueError('Day room has failed attachments; inspect the room before publishing')
             with self.ledger.transaction():
                 self.ledger.set_meta('day_room_id',room_id)
+        self.subscription_grace = asyncio.get_running_loop().time() + 30
         try:
             room = await self.client.connect_to_production(room_id)
             name='day-1-plan'

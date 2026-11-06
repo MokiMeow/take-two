@@ -26,7 +26,7 @@ async def test_personal_confirm_and_duplicate_after_restart(tmp_path: Path) -> N
     await rt.close()
     rt = runtime(tmp_path)
     assert not await rt.loop.handle_outcome(outcome(q))
-    assert rt.ledger.snapshot_state()['releases'][0]['acks']['confirmed'] == [dict(person='maya', at=rt.ledger.snapshot_state()['releases'][0]['acks']['confirmed'][0]['at'])]
+    assert rt.ledger.snapshot_state()['releases'][0]['acks']['confirmed'] == [dict(person='maya', at=rt.ledger.snapshot_state()['releases'][0]['acks']['confirmed'][0]['at'], source='mattermost')]
     assert not any(c['person'] == 'maya' and c['status'] == 'open' for c in rt.loop.workflow['cards'].values())
     await rt.close()
 

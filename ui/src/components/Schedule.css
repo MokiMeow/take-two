@@ -255,3 +255,6 @@
 }
 .mark-label[data-edge="right"] { left: auto; right: 0; transform: none; }
 .mark-label[data-edge="left"] { left: 0; transform: none; }
+
+/* The "was here" outline names the old place in its top corner, clear of the marks below. */
+.ghost span { position: absolute; top: 3px; right: 6px; left: auto; bottom: auto; }

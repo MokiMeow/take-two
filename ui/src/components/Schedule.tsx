@@ -29,14 +29,17 @@ const LETTERS = "ABCDEFGH";
 
 interface Props {
   state: State;
+  // A fixed hour window for the whole day, so blocks never jump when the axis rescales.
+  window?: { from: number; to: number };
   ghosts: Record<string, ScenePlan>;
   focus: string | null;
   onFocus: (id: string | null) => void;
 }
 
-export function Schedule({ state, ghosts, focus, onFocus }: Props) {
+export function Schedule({ state, ghosts, focus, onFocus, window: win }: Props) {
   const tz = state.production.timezone;
-  const { from, to } = dayWindow(state, Object.values(ghosts));
+  const own = dayWindow(state, Object.values(ghosts));
+  const { from, to } = win ? { from: Math.min(win.from, own.from), to: Math.max(win.to, own.to) } : own;
   const span = to - from;
   const pos = (iso: string) => ((+new Date(iso) - from) / span) * 100;
   const frac = (a: string, b: string) => (+new Date(b) - +new Date(a)) / span;
@@ -147,7 +150,7 @@ function SceneRow({ scene, ghost, pos, frac, tz, marks: m, dim }: {
       <div className="row-label">
         <b>{String(scene.number).padStart(2, "0")}</b>
         <span className="row-title">{scene.title}</span>
-        <small>{p ? (held ? "On hold" : `${title(p.location)} · ${hhmm(p.start, tz)}`) : "Not scheduled"}</small>
+        <small>{p ? (held ? "On hold" : `${title(p.location)} · ${hhmm(p.start, tz)}`) : "Waiting for the first plan"}</small>
       </div>
       <div className="track">
         {ghost && <Ghost plan={ghost} pos={pos} frac={frac} />}
@@ -160,7 +163,7 @@ function SceneRow({ scene, ghost, pos, frac, tz, marks: m, dim }: {
               style={{ "--color": sceneColor(scene.number), transform: `scaleX(${frac(p.start, p.end)})` } as CSSProperties}
             />
             <BlockText w={frac(p.start, p.end)}>
-              <span className="block-loc" data-struck={held}>{title(p.location)}</span>
+              <span className="block-loc">{title(p.location)}</span>
               <span className="block-min">{held ? "ON HOLD" : `${Math.round((+new Date(p.end) - +new Date(p.start)) / 60000)}′`}</span>
             </BlockText>
           </div>
@@ -193,7 +196,7 @@ function Ghost({ plan, pos, frac }: { plan: ScenePlan; pos: (s: string) => numbe
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 0.25, duration: 0.3 }}
-      style={{ width: `${w * 100}%`, left: `${pos(plan.start)}%` }}
+      style={{ width: `${Math.min(w * 100, 100 - Math.max(0, pos(plan.start)))}%`, left: `${Math.max(0, pos(plan.start))}%` }}
     >
       <span>was {title(plan.location)}</span>
     </motion.div>

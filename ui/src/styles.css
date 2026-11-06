@@ -30,7 +30,11 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  background: var(--page);
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 520px at 78% -8%, #ff70490f, transparent 70%),
+    radial-gradient(900px 600px at 0% 110%, #4a7bd90a, transparent 70%),
+    var(--page);
   color: var(--ink);
   font-family: var(--sans);
   font-size: 14px;

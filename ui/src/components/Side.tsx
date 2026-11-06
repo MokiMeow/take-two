@@ -4,7 +4,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowBendUpLeft, Check, Clock, FileText, Warning } from "@phosphor-icons/react";
 import type { State } from "../types";
-import { hhmm, initials } from "../format";
+import { hhmm, initials, paperFor } from "../format";
 import { currentRelease, humanize, pendingCrew, roleLabel, who as whoOf } from "../story";
 import { mediaUrl } from "../data";
 import { useMemo } from "react";
@@ -14,6 +14,26 @@ import "../sets/sets.css";
 import "./Side.css";
 
 // The option's set model, built from its own manifest.
+export function Stage({ c, state, letter, caption }: { c: Candidate; state: State; letter?: string; caption: string }) {
+  const tz = state.production.timezone;
+  return (
+    <div className="stage">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div key={c.candidate_id} className="stage-model" initial={{ opacity: 0, y: 14, scale: 0.98, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }} exit={{ opacity: 0, y: -10, filter: "blur(6px)" }} transition={{ duration: 0.5, ease: EASE }}>
+          <SetModel c={c} state={state} />
+        </motion.div>
+      </AnimatePresence>
+      <div className="stage-cap">
+        {letter && <i className="letter">{letter}</i>}
+        <span className="stage-loc">{c.manifest.location}</span>
+        <span className="stage-time">{hhmm(c.manifest.start, tz)}–{hhmm(c.manifest.end, tz)}</span>
+        <span className="stage-shots">{c.manifest.shots.join(" · ")}</span>
+      </div>
+      <span className="stage-tag">{caption}</span>
+    </div>
+  );
+}
+
 function SetModel({ c, state }: { c: Candidate; state: State }) {
   const names = useMemo(() => Object.fromEntries(state.crew.map((m) => [m.id, m.name])), [state.crew]);
   const cast = c.manifest.people.filter((id) => /actor/i.test(state.crew.find((m) => m.id === id)?.role ?? ""));
@@ -27,10 +47,48 @@ function SetModel({ c, state }: { c: Candidate; state: State }) {
 const EASE = [0.23, 1, 0.32, 1] as const;
 const LETTERS = "ABCDEFGH";
 
+export function ReplanCard({ state }: { state: State }) {
+  const held = state.scenes.filter((x) => x.validity === "held");
+  const sc = held[held.length - 1];
+  const nums = held.map((x) => x.number).join(" and ");
+  const agents = [
+    { role: "script-supervisor", name: "Claude Code", job: "What must each scene keep?" },
+    { role: "first-ad", name: "Codex", job: "Plans that fit the new facts" },
+  ];
+  const status = (role: string) => {
+    const j = [...state.jobs].reverse().find((x) => x.role === role);
+    return j?.status === "done" ? "done" : j ? "working" : "queued";
+  };
+  return (
+    <motion.section layout className="card decision replan" transition={{ duration: 0.3, ease: EASE }}>
+      <header className="card-head"><span className="dot dot-ask" /> Re-planning Scene{held.length > 1 ? "s" : ""} {nums}</header>
+      {sc?.plan && (
+        <div className="replan-stage">
+          <Stage c={{ candidate_id: `held-${sc.id}`, label: sc.title, story_cost: "", check: { result: "pass", reasons: [] }, manifest_hash: "", preview_status: "none",
+            manifest: { scene_id: sc.id, location: sc.plan.location, start: sc.plan.start, end: sc.plan.end, setup_min: sc.plan.setup_min, wrap_min: sc.plan.wrap_min, people: sc.plan.people, shots: ["wide"], capabilities: [] } }}
+            state={state} caption={`On hold · the plan nobody may use`} />
+          <span className="replan-hold">On hold</span>
+        </div>
+      )}
+      <ul className="agents">
+        {agents.map((a) => (
+          <li key={a.role} data-status={status(a.role)}>
+            <span className="agent-dot" />
+            <b>{a.name}</b><small>{a.role}</small>
+            <span className="agent-job">{a.job}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="how">The agents only propose. Every plan is checked in code before {state.decision?.authority_name ?? "the director"} sees it.</p>
+    </motion.section>
+  );
+}
+
 export function DecisionCard({ state, focus, onFocus }: { state: State; focus: string | null; onFocus: (id: string | null) => void }) {
   const d = state.decision;
   const tz = state.production.timezone;
   if (!d) return null;
+  if (d.status === "answered" && state.scenes.some((x) => x.validity === "held")) return <ReplanCard state={state} />;
   const passing = d.candidates.filter((c) => c.check.result === "pass");
   const ruled = d.candidates.filter((c) => c.check.result !== "pass");
   const chosen = d.answer && d.candidates.find((c) => c.candidate_id === d.answer!.candidate_id);
@@ -50,13 +108,17 @@ export function DecisionCard({ state, focus, onFocus }: { state: State; focus: s
       <AnimatePresence mode="popLayout" initial={false}>
         {d.status === "answered" && chosen ? (
           <motion.div key="answered" className="answer" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.28, ease: EASE }}>
-            <SetModel c={chosen} state={state} />
+            <Stage c={chosen} state={state} caption="Set model · the approved plan" />
             <p className="answer-line">{d.answer!.answered_by_name ?? whoOf(state.crew, d.answer!.answered_by)} chose <b>{chosen.label}</b>.</p>
             {d.answer!.note && <blockquote>“{d.answer!.note}”</blockquote>}
             <p className="answer-meta">{hhmm(d.answer!.at, tz)} · answered in Switch</p>
           </motion.div>
         ) : (
           <motion.div key="open" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }}>
+            {passing.length > 0 && (() => {
+              const fi = Math.max(0, passing.findIndex((c) => focus === `${sceneId}:${c.candidate_id}`));
+              return <Stage c={passing[fi]} state={state} letter={LETTERS[fi]} caption={`Set model · option ${LETTERS[fi]}`} />;
+            })()}
             <p className="question">{d.question}</p>
             {d.must_keep && d.must_keep.length > 0 && (
               <p className="must-keep" title={d.requirements_note}>
@@ -74,7 +136,6 @@ export function DecisionCard({ state, focus, onFocus }: { state: State; focus: s
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.06 * i, duration: 0.24, ease: EASE }}
                 >
-                  <SetModel c={c} state={state} />
                   <i className="letter">{LETTERS[i]}</i>
                   <div>
                     <p className="choice-title">{c.label} <span className="choice-time">{hhmm(c.manifest.start, tz)}–{hhmm(c.manifest.end, tz)}</span></p>
@@ -107,14 +168,27 @@ export function ReleaseCard({ state, onSheet }: { state: State; onSheet: (url: s
             Release {r.number}
           </motion.span>
         </AnimatePresence>
-        <span className="card-meta">{hhmm(r.created_at, tz)} · sent to {roomsOf(r.publications)}</span>
+        <span className="card-meta">{hhmm(r.created_at, tz)} · through Switch</span>
       </header>
-      <p className="rel-summary">{r.summary}</p>
-      {sheet && (
-        <button className="ghost-btn" onClick={() => onSheet(sheet)}>
-          <FileText size={14} /> Call sheet
-        </button>
-      )}
+      <div className="rel-body">
+        {sheet && (
+          <button className="rel-sheet" onClick={() => onSheet(sheet)} aria-label="Open the call sheet" style={{ background: paperFor(r.number).bg }}>
+            <img src={sheet} alt="" />
+          </button>
+        )}
+        <div className="rel-text">
+          <p className="rel-summary">{r.summary}</p>
+          <ul className="rel-rooms">
+            {r.publications.map((p) => (
+              <li key={p.room} data-platform={p.platform} data-status={p.status}>
+                <span className="rel-room-icon" />{p.room_name ?? roomsOf([p])}<small>{p.platform === "discord" ? "Discord" : "Mattermost"}</small>
+                {p.status === "sent" && <Check size={11} weight="bold" className="t-go" />}
+              </li>
+            ))}
+          </ul>
+          {sheet && <button className="ghost-btn" onClick={() => onSheet(sheet)}><FileText size={14} /> Call sheet · {paperFor(r.number).name} paper</button>}
+        </div>
+      </div>
     </motion.section>
   );
 }

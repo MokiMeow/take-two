@@ -99,7 +99,7 @@ export function story(s: State): Story {
     return {
       tone: "hold",
       headline: `Scene${held.length > 1 ? "s" : ""} ${listJoin(nums)} ${held.length > 1 ? "are" : "is"} on hold.`,
-      detail: held[0].hold_reason ?? "Waiting for a new plan.",
+      detail: holdDetail(s),
     };
   }
   if (r) {
@@ -114,6 +114,13 @@ export function story(s: State): Story {
     return { tone: "done", headline: `Everyone is on release ${r.number}.`, detail: r.summary };
   }
   return { tone: "calm", headline: "No plan released yet.", detail: "The first release goes out once the day is scheduled." };
+}
+
+// Why scenes are held, as a sentence: the newest recorded change, never a raw field name.
+function holdDetail(s: State): string {
+  const c = s.changes.find((x) => x.status === "recorded");
+  const why = c ? changeSentence(s, c) : "";
+  return `${why}${why ? " " : ""}Nobody works from the old plan while the agents find a new one.`;
 }
 
 // The newest recorded change, as a sentence with a trailing space, or nothing.
@@ -146,7 +153,9 @@ export const BEATS = ["Change reported", "Scene held", "Agents find options", "D
 export function beat(s: State): { at: number; redo: boolean } | null {
   if (!s.changes.length) return null;
   const d = s.decision;
+  const held = s.scenes.some((x) => x.validity === "held");
   // `at` is the beat in progress (1-based); 7 means every beat is done.
+  if (held && d?.status !== "open" && d?.status !== "closed_outdated") return { at: 3, redo: false };
   if (d?.status === "answered") return { at: pendingCrew(s).length ? 6 : 7, redo: false };
   if (d?.status === "open") return { at: 4, redo: false };
   if (d?.status === "closed_outdated") return { at: 3, redo: true };

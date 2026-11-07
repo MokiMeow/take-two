@@ -16,7 +16,7 @@ Agents propose. Code checks. People decide. Every message goes through [Switch](
   <img src="docs/media/film-poster.jpg" alt="Take Two, the film (2:12). Click to watch." width="880">
 </a>
 
-**[Watch the 2-minute film](https://github.com/MokiMeow/take-two/releases/download/v1.0/take-two-film.mp4)** · [How it works](#how-it-works) · [How Switch is used](#how-switch-is-used) · [Run it in 5 minutes](#run-it)
+**[Try the live demo](https://take-two-demo.vercel.app)** · **[Watch the 2-minute film](https://github.com/MokiMeow/take-two/releases/download/v1.0/take-two-film.mp4)** · [How it works](#how-it-works) · [How Switch is used](#how-switch-is-used) · [Run it in 5 minutes](#run-it)
 
 </div>
 
@@ -137,6 +137,8 @@ Only approved plans and holds ever reach the crew room. Options, arguments and a
 ## Run it
 
 Full instructions: **[QUICKSTART.md](QUICKSTART.md)**.
+
+**0. In the browser:** [take-two-demo.vercel.app](https://take-two-demo.vercel.app) plays the recorded day by itself. Press **Run the demo**, or step with the arrow keys. It is the same replay as step 1, built with `npm run build:demo --prefix ui`.
 
 **1. Replay the recorded shoot day** (Node 24, about 5 minutes, nothing else needed)
 

@@ -60,7 +60,7 @@ class PlanningTransitions:
             body += ' Do not go to the rooftop.'
         unchanged = [str(s['number']) for s in state['scenes'] if s['id'] not in scene_ids and s['validity']=='valid']
         if unchanged:
-            body += '\nScenes '+' and '.join(unchanged)+' are unchanged.'
+            body += f'\nScene {unchanged[0]} is unchanged.' if len(unchanged)==1 else '\nScenes '+' and '.join(unchanged)+' are unchanged.'
         body += ' An update is coming.'
         self._event(state,'hold',body,ref)
         self._queue('hold',dict(scene_ids=scene_ids,body=body),f'hold:{ref}')

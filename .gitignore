@@ -5,9 +5,10 @@ node_modules/
 __pycache__/
 *.sqlite
 narration-takes/
-work/*.log
+*.log
 .pytest_cache/
 .pytest_tmp*/
 .test-tmp*/
 .venv/
 .remotion/
+/*.mp4

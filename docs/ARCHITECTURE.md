@@ -10,9 +10,9 @@
 | Coordinator | **Python 3.12**: `httpx`, `websockets`, `pydantic`, `sqlite3` | A custom Switch agent (no LLM). Owns the state machine, checks, release ledger |
 | Reasoning agents | **Claude Code / Codex sessions run by Switch Console**, one per role | Switch-native agents; they receive work by role and reply with structured proposals |
 | Checker | Plain Python inside the coordinator | Deterministic: same input, same verdict. No model opinion |
-| Previews | **Remotion 4** (React/TypeScript), one fixed composition, `inputProps` = shot manifest | Renders a 5-second sketch animation per option from data, not from generated code |
+| Previews | **Remotion 4** (React/TypeScript), one fixed composition, `inputProps` = shot manifest | Renders a 5-second clip of the option's isometric set model from data, not from generated code |
 | Call sheet | Remotion `renderStill` to PNG, plus a Markdown text version | The call sheet is made from the same manifest as the preview, so they can't disagree |
-| Art | The builder's existing hand-drawn style assets, fixed camera and layout presets | Allowed as pre-existing assets; keeps renders fast and consistent |
+| Set models | `ui/src/sets/maquette.ts` on the MIT Anatomy isometric kit | One drawing shared by the Control Room and the rendered previews, so the director and the crew see the same picture |
 | Fixtures | YAML: script/brief, constraints, crew list | Small, supplied data for one 3-scene film |
 
 Runtime shape: **one coordinator process, one fixed renderer bundle, two worker identities.** The coordinator calls the Node renderer as a time-limited subprocess, with absolute paths and a manifest file; the same props go to composition selection and rendering. Pin exact package versions and the Switch images, and install the render browser during setup.
@@ -153,7 +153,7 @@ Tables: `inbox` (with the processed event position), `changes`, `jobs`, `questio
 
 Switch keeps an outcome owed until it is acknowledged, but it doesn't re-send it on a healthy stream, so the coordinator fetches pending outcomes itself after a restart.
 
-## Repo layout (to be created from 4 Nov 00:01 IST)
+## Repo layout
 
 ```
 take-two/

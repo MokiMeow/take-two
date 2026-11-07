@@ -51,6 +51,38 @@ def change_label(command: ChangeCommand, metadata: dict[str, Any]) -> str:
     return f"{target}: {command.field.replace('_', ' ')} {command.value}"
 
 
+def change_sentence(command: ChangeCommand, metadata: dict[str, Any]) -> str:
+    """The crew-facing reason for a hold, worded like the Control Room's own sentences."""
+    zone = metadata.get('production', {}).get('timezone', 'Asia/Kolkata')
+
+    def at(value: str) -> str:
+        try:
+            return hhmm(value, zone)
+        except ValueError:
+            return value
+
+    names = {p['id']: p['name'] for p in metadata.get('crew', [])}
+    who = names.get(command.target, command.target.replace('_', ' ').title())
+    place = command.target.replace('_', ' ')
+    field, value = command.field, command.value
+    if command.entity == 'person' and field == 'hard_stop':
+        return f'{who} must leave at {at(value)}'
+    if command.entity == 'person' and field == 'late_by':
+        return f'{who} is running {value} minutes late'
+    if command.entity == 'person' and field == 'available':
+        return f'{who} is available {value}'
+    if command.entity == 'location' and field == 'permission':
+        return f'{place.capitalize()} permission {value}'
+    if command.entity == 'location' and field == 'light_until':
+        return f'Usable light at the {place} ends at {at(value)}'
+    if command.entity == 'capability':
+        return f'{kit_label(command.target, metadata).capitalize()} is {value}'
+    if command.entity == 'scene' and field == 'overrun':
+        number = next((s['number'] for s in metadata.get('scenes', []) if s['id'] == command.target), command.target)
+        return f'Scene {number} ran {value} minutes over'
+    return f"{place.capitalize()} {field.replace('_', ' ')}: {value}"
+
+
 def resolved_change_at(command: ChangeCommand, facts: Constraints, fallback: str) -> str:
     """Expose precisely the validated time used by the checker; retain raw value."""
     collection = {'person': 'people', 'location': 'locations'}.get(command.entity)

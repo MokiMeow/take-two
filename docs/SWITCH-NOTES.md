@@ -1,6 +1,6 @@
 # Switch notes
 
-Reviewed against commit `989225d8` (2 Nov 2026, clone at `E:\DevDrive\switch`). Below, **source-supported** means the code allows it. Nothing here has been run yet; every item is a day-1 runtime check.
+Reviewed against Switch commit `989225d8` (2 Nov 2026). **Source-supported** means the Switch code allows it. The coordinator protocol, question cards, room documents, roles, media uploads and rooms from YAML below have all been exercised by `scripts/demo_day.py` against a real Switch server; Discord card buttons have not.
 
 ## Coordinator protocol
 - **Register:** `POST /agents` with `connector_type` and an integration profile (`register-known` rejects custom types). It needs a registration credential; afterwards use the returned agent key as `Authorization: Bearer`. Use a **personal** registration key so the user owns the coordinator, not the bootstrap account. Store the identity and never re-register on startup (`overwrite: true` rotates credentials).

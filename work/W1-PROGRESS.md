@@ -1,4 +1,0 @@
-2026-11-04: BLOCKER Part A: docker ps denied access to Docker engine pipe and Docker config; Docker not started or modified. Investigating Console fallback; coordinator work proceeding.
-2026-11-04: Part A fallback: Console v0.40.1 downloaded to out and launched PID 3580; native UI helper unavailable, no Switch health on localhost:8000. Setup scripts prepared from pinned source without editing it. Six UI fixtures written; checker 62 cases pass.
-2026-11-04: Runtime changed during final verification: Switch /health and /health/ready and Mattermost ping now HTTP 200. Attempting real identity + live card probe; Docker pipe still previously denied.
-2026-11-04 09:00 IST: Real personal-key registration, private production room, script/constraints documents and native Mattermost card succeeded; uninterrupted WebSocket 300.09s, one opening. Full tests190 pass/1skip; live state/SSE/UI/traversal smoke passed. Docker CLI inspection still denied.

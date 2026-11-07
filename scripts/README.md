@@ -1,6 +1,6 @@
 # Coordinator operations
 
-Run commands from the repository root with `UV_CACHE_DIR=data/uv-cache` on this restricted Windows workspace.
+Run commands from the repository root. The everyday path is in [QUICKSTART.md](../QUICKSTART.md); this page covers the individual tools.
 
 Stop the coordinator before `uv run python -m scripts.reset_demo`. It backs up the SQLite database to `data/backups/<timestamp>.sqlite` and clears its ledger rows. It does not alter `data/identity.json`, question identity credentials, or Switch rooms. Start the coordinator again with `uv run python -m coordinator`.
 
@@ -10,6 +10,6 @@ The director starts the normal-day loop in Mattermost with `/plan day-1`. The AD
 
 `uv run python -m scripts.demo_dry_run` runs the FLOW story with registered simulated worker agents and separate Mattermost test people against the real Switch server. It uses an isolated ledger and registered identities in `data/w4-demo`, plus a private Mattermost room. It performs real rendering, upload, question answering, holds and confirmations. Its local API is on port 8788 while running. Each run backs up and resets only that isolated ledger, keeps credentials, and prints a redacted final `/api/state` summary.
 
-Publication status `sent` means **accepted by Switch for relay**. It does not prove a Discord user received or opened the attachment. The local release status `published` uses that same acceptance threshold. Observed bridge delivery errors appear in the timeline. Discord is not connected yet in this demo; `day_room_status=no_discord_bridge` is visible and no fake crew destination is created.
+Publication status `sent` means **accepted by Switch for relay**. It does not prove a Discord user received or opened the attachment. The local release status `published` uses that same acceptance threshold. Observed bridge delivery errors appear in the timeline. When no Discord bridge is configured, `day_room_status=no_discord_bridge` is shown and no fake crew destination is created. With the bridge configured (`TAKE_TWO_DISCORD_BRIDGE`), `demo_day` creates `#day-1` on Discord from `templates/shoot-day.yaml` and every release is posted there too.
 
 The browser can submit pending reports and conservative holds. Its reporter text grants no authority. Only authenticated Switch authorities can confirm facts or clear a hold; only the named director's current, checked answer can release a plan. Supervisor `must_keep` appears on the card as prose for human review and is not machine-checked.

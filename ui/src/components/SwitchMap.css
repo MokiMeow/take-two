@@ -15,7 +15,7 @@
 .sm-graph-head {
   position: absolute;
   left: 18px;
-  top: 14px;
+  bottom: 14px;
   z-index: 1;
   display: grid;
   gap: 2px;
@@ -45,6 +45,9 @@
   transition: box-shadow 0.3s ease, background-color 0.3s ease;
 }
 .sm-node[data-lit="true"] { background: var(--raised-2); }
+/* The room nodes sit against the map's edges, so their long captions never run off it. */
+.sm-node[data-node="mm"] { left: 18px !important; translate: 0 -50%; }
+.sm-node[data-node="discord"] { left: auto !important; right: 18px; translate: 0 -50%; }
 .sm-ring {
   position: absolute;
   inset: -1px;

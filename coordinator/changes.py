@@ -3,7 +3,7 @@ from typing import Any
 from uuid import uuid4
 from coordinator.ui_models import ChangeCommand, ChangeResponse
 from coordinator.workflow_models import apply_change
-from coordinator.presentation import person_name, person_label, resolved_change_at
+from coordinator.presentation import change_sentence, person_name, person_label, resolved_change_at
 
 
 class ChangeTransitions:
@@ -39,7 +39,7 @@ class ChangeTransitions:
         self._event(state,'change',f'{label}: {command.target} {command.field} {command.value} ({status}).',change_id)
         affected = self._affected(command,state) if facts is not None or status=='recorded' else list(self.workflow.get('unresolved',[]))
         if status == 'recorded':
-            self._hold(state,affected,f'{command.target} {command.field} {command.value}',change_id)
+            self._hold(state,affected,change_sentence(command,getattr(self,'metadata',{})),change_id)
             state['jobs'] = []
             if affected:
                 eligible = [sid for sid in affected if sid not in self.workflow['holds'] and

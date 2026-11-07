@@ -36,10 +36,13 @@ export function Stage({ c, state, letter, caption }: { c: Candidate; state: Stat
 
 function SetModel({ c, state }: { c: Candidate; state: State }) {
   const names = useMemo(() => Object.fromEntries(state.crew.map((m) => [m.id, m.name])), [state.crew]);
-  const cast = c.manifest.people.filter((id) => /actor/i.test(state.crew.find((m) => m.id === id)?.role ?? ""));
+  const castKey = c.manifest.people.filter((id) => /actor/i.test(state.crew.find((m) => m.id === id)?.role ?? "")).join(",");
+  const shotKey = c.manifest.shots.join(",");
+  const location = c.manifest.location;
+  // Keyed on joined strings so a fresh array with the same content does not redraw the model.
   const svg = useMemo(
-    () => maquette({ location: c.manifest.location, people: cast, shots: c.manifest.shots, names }),
-    [c.manifest.location, cast.join(","), c.manifest.shots.join(","), names],
+    () => maquette({ location, people: castKey ? castKey.split(",") : [], shots: shotKey ? shotKey.split(",") : [], names }),
+    [location, castKey, shotKey, names],
   );
   return <div className="set iso" dangerouslySetInnerHTML={{ __html: svg }} />;
 }

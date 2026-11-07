@@ -29,7 +29,7 @@
 }
 @media (max-width: 760px) {
   .app { padding: 0 16px 32px; }
-  .sheet { --label: 132px; padding: 16px 14px 12px; overflow-x: auto; }
+  .sheet { --label: 132px; padding: 16px 14px 12px; }
 }
 .main-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .main-col > .sm-graph { flex: 1 1 auto; min-height: 262px; }
@@ -40,8 +40,64 @@
   .main-col { display: contents; }
   .sheet { order: 1; }
   .side { order: 2; }
-  .crew { order: 3; }
+  .sm-graph { order: 3; }
+  .crew { order: 4; }
 }
 @media (max-width: 760px) {
   .sheet-hours span:nth-child(even) { visibility: hidden; }
+}
+
+/* Smaller screens. Blocks that run past the day window are clipped, never widen the page. */
+.sheet { overflow-x: clip; }
+@media (max-width: 1080px) {
+  .lead { grid-template-columns: minmax(0, 1fr); }
+  .lead .counters { display: flex; gap: 28px; padding-top: 0; margin-top: 4px; }
+  .lead .counters div { justify-items: start; }
+  .lead .counters dd { font-size: 24px; }
+  .film, .film-day { white-space: nowrap; }
+  .film-day, .clock { display: none; }
+  .stage { max-height: 440px; }
+  .stage .set.iso svg { max-height: 380px; }
+}
+@media (max-width: 900px) {
+  .brand-sep, .film { display: none; }
+}
+@media (max-width: 560px) {
+  .app { padding: 0 12px 24px; }
+  .topbar { height: 56px; }
+  .replay-pos { min-width: 0; max-width: 150px; }
+  .lead h1 { font-size: 24px; line-height: 1.15; }
+  .lead-detail { font-size: 14px; }
+  .lead .counters { gap: 22px; }
+  .lead .counters dt { font-size: 9.5px; }
+  .lead .counters dd { font-size: 20px; }
+  .beats { column-gap: 8px; }
+  .beat-name { font-size: 11px; }
+
+  /* Schedule: a narrow label so the time track gets the width. */
+  .sheet { --label: 96px; padding: 14px 12px 12px; }
+  .sheet-head { flex-direction: column; gap: 2px; }
+  .row-label { padding-left: 24px; padding-right: 8px; }
+  .row-label b { font-size: 15px; top: 2px; }
+  .row-title { font-size: 12px; }
+  .row-label small { font-size: 9.5px; }
+  .opt .row-label { padding-left: 26px; }
+  .opt-letter { width: 18px; height: 18px; font-size: 10px; left: 0; }
+  .block-text { padding: 0 6px; }
+  .block-loc { font-size: 11px; }
+  .block-min { font-size: 12px; }
+  .now-label, .mark-label { font-size: 9px; padding: 2px 4px; }
+
+  /* Set model caption wraps as a block instead of breaking the place name. */
+  .stage-cap { flex-wrap: wrap; row-gap: 2px; padding: 0 12px 12px; }
+  .stage-loc { white-space: nowrap; }
+  .stage-shots { margin-left: 0; flex-basis: 100%; }
+
+  /* Switch map: the moving labels repeat the feed, and would run off the edges here. */
+  .sm-graph { min-height: 280px; }
+  .sm-tag { display: none; }
+  .sm-node { gap: 6px; padding: 6px 9px 6px 7px; }
+  .sm-node[data-node="mm"] { left: 10px !important; }
+  .sm-node[data-node="discord"] { right: 10px; }
+  .sm-text b { font-size: 11.5px; }
 }

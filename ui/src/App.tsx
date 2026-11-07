@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MotionConfig } from "motion/react";
-import { fixtures, useProductionState, type Source } from "./data";
+import { DEMO, fixtures, useProductionState, type Source } from "./data";
+import { DemoBar, DemoIntro, useAutoplay } from "./components/Demo";
 import type { ScenePlan, State } from "./types";
 import { Schedule } from "./components/Schedule";
 import { SwitchFeed, SwitchGraph, useSwitchTraffic } from "./components/SwitchMap";
@@ -53,12 +54,17 @@ export default function App() {
   const [history, setHistory] = useState(false);
   const [report, setReport] = useState(false);
   const [sheet, setSheet] = useState<string | null>(null);
+  const [intro, setIntro] = useState(DEMO);
+  const [playing, setPlaying] = useState(false);
+  const index = source.kind === "fixture" ? source.index : 0;
+  useAutoplay(index, DEMO && playing, setPlaying, setFixture);
 
   // In demo replay, keys 1–6 step through the story.
   useEffect(() => {
     if (source.kind !== "fixture") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") setPlaying(false);
       const n = Number(e.key);
       if (n >= 1 && n <= 9 && fixtures.length <= 9) setFixture(n - 1);
       if (e.key === "ArrowRight") setFixture(Math.min(fixtures.length - 1, (source.kind === "fixture" ? source.index : 0) + 1));
@@ -71,11 +77,19 @@ export default function App() {
   if (!state) {
     return <div className="boot"><span className="boot-dot" /> Connecting to the coordinator</div>;
   }
-  return <Room state={state} source={source} setFixture={setFixture} ghosts={ghosts} win={win} film={film}
+  const demo = DEMO ? {
+    bar: <DemoBar index={index} playing={playing} onToggle={() => {
+      if (!playing && index >= fixtures.length - 1) setFixture(0);
+      setPlaying(!playing);
+    }} />,
+    intro: <DemoIntro open={intro} onRun={() => { setIntro(false); setFixture(0); setPlaying(true); }} onClose={() => setIntro(false)} />,
+  } : null;
+  return <Room demo={demo} state={state} source={source} setFixture={setFixture} ghosts={ghosts} win={win} film={film}
     focus={focus} setFocus={setFocus} history={history} setHistory={setHistory} report={report} setReport={setReport} sheet={sheet} setSheet={setSheet} />;
 }
 
-function Room({ state, source, setFixture, ghosts, win, film, focus, setFocus, history, setHistory, report, setReport, sheet, setSheet }: {
+function Room({ demo, state, source, setFixture, ghosts, win, film, focus, setFocus, history, setHistory, report, setReport, sheet, setSheet }: {
+  demo: { bar: React.ReactNode; intro: React.ReactNode } | null;
   state: State; source: Source; setFixture: (i: number) => void; ghosts: Record<string, ScenePlan>;
   win: { from: number; to: number } | undefined; film: boolean; focus: string | null; setFocus: (f: string | null) => void;
   history: boolean; setHistory: (b: boolean) => void; report: boolean; setReport: (b: boolean) => void;
@@ -84,6 +98,7 @@ function Room({ state, source, setFixture, ghosts, win, film, focus, setFocus, h
   const traffic = useSwitchTraffic(state);
   return (
     <MotionConfig reducedMotion="user">
+      {demo?.bar}
       <div className="app" data-film={film || undefined}>
         <TopBar state={state} source={source} setFixture={setFixture} onHistory={() => setHistory(true)} onReport={() => setReport(true)} />
         <Lead state={state} />
@@ -104,6 +119,7 @@ function Room({ state, source, setFixture, ghosts, win, film, focus, setFocus, h
       <History state={state} open={history} onClose={() => setHistory(false)} />
       <ReportDialog open={report} onClose={() => setReport(false)} />
       <SheetDialog url={sheet} onClose={() => setSheet(null)} />
+      {demo?.intro}
     </MotionConfig>
   );
 }

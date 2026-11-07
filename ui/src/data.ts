@@ -15,7 +15,9 @@ const toList = (mods: Record<string, State>) =>
       state,
     }));
 
-const wantDay = new URLSearchParams(location.search).get("fixtures") === "day";
+// The hosted demo (VITE_DEMO=1) always replays the recorded day and never calls an API.
+export const DEMO = import.meta.env.VITE_DEMO === "1";
+const wantDay = DEMO || new URLSearchParams(location.search).get("fixtures") === "day";
 export const fixtures: { name: string; state: State }[] = toList(wantDay && Object.keys(dayModules).length ? dayModules : storyModules);
 
 export type Source =
@@ -34,7 +36,7 @@ export function useProductionState(): {
 } {
   const [state, setState] = useState<State | null>(null);
   const [source, setSource] = useState<Source>({ kind: "connecting" });
-  const fixtureMode = useRef(new URLSearchParams(location.search).has("fixtures"));
+  const fixtureMode = useRef(DEMO || new URLSearchParams(location.search).has("fixtures"));
 
   useEffect(() => {
     if (fixtureMode.current) {
@@ -112,7 +114,16 @@ export async function postChange(cmd: ChangeCommand): Promise<{ status: string; 
   return r.json();
 }
 
+// Call sheets recorded with the day, bundled so the hosted demo can show them without a server.
+const demoMedia = DEMO
+  ? import.meta.glob<string>("../../fixtures/media/*.webp", { eager: true, query: "?url", import: "default" })
+  : {};
+
 export function mediaUrl(path: string | undefined): string | undefined {
   if (!path) return undefined;
+  if (DEMO) {
+    const name = path.split("/").pop()!.replace(/\.png$/, ".webp");
+    return Object.entries(demoMedia).find(([k]) => k.endsWith("/" + name))?.[1];
+  }
   return path.startsWith("http") ? path : `${API}${path}`;
 }

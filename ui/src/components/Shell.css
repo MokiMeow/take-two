@@ -21,7 +21,8 @@
 }
 .logo i:first-child { left: 0; top: 0; background: #ff7049; }
 .logo i:last-child { right: 0; bottom: 0; background: #eff0e9; mix-blend-mode: normal; box-shadow: 0 0 0 2px var(--page); }
-.brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+.brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+@media (max-width: 480px) { .brand-name { display: none; } }
 .brand-sep { width: 1px; height: 16px; background: var(--rule-strong); margin: 0 4px; }
 .film { font-size: 14px; font-weight: 500; }
 .film-day { font: 11px var(--mono); color: var(--faint); }

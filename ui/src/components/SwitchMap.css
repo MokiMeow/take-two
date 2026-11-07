@@ -184,4 +184,6 @@
   .sm-graph { height: 300px; }
   .sm-node { padding: 7px 10px 7px 8px; }
   .sm-text b { font-size: 12px; }
+  /* No room for the caption under the coordinator node on a phone. */
+  .sm-graph-head { display: none; }
 }

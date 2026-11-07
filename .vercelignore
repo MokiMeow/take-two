@@ -1,0 +1,15 @@
+data
+render
+coordinator
+scripts
+tests
+docs
+agents
+templates
+.venv
+**/node_modules
+*.mp4
+.pytest_cache
+.ruff_cache
+.git
+film

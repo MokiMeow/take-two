@@ -1,0 +1,87 @@
+.demo-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #0b0d0fcc;
+  backdrop-filter: blur(3px);
+}
+.demo-intro {
+  width: min(560px, 100%);
+  padding: 28px;
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  box-shadow: var(--lift), 0 0 0 1px var(--rule-strong);
+}
+.demo-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font: 11px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.demo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hold); flex: none; }
+.demo-intro h2 { margin: 0 0 12px; font: 600 26px/1.15 var(--sans); letter-spacing: -0.02em; color: var(--ink); text-wrap: balance; }
+.demo-copy { margin: 0 0 10px; font: 14px/1.55 var(--sans); color: var(--secondary); text-wrap: pretty; }
+.demo-small { font-size: 13px; color: var(--faint); }
+.demo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.demo-actions .btn { text-decoration: none; }
+.demo-actions .btn span { display: inline; }
+.demo-run { height: 36px; padding: 0 16px; }
+.demo-skip {
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 12px var(--sans);
+  color: var(--faint);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--sheet);
+  font: 12px var(--sans);
+  color: var(--secondary);
+}
+.demo-tag { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.demo-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--page);
+  font: 600 12px var(--sans);
+  cursor: pointer;
+}
+.demo-play:active { scale: 0.96; }
+.demo-track { flex: 1; min-width: 40px; height: 3px; border-radius: 2px; background: var(--raised-2); overflow: hidden; }
+.demo-fill { display: block; height: 100%; background: var(--go); transform-origin: left; }
+.demo-count { font: 11px var(--mono); color: var(--faint); min-width: 38px; }
+.demo-links { display: inline-flex; gap: 14px; }
+.demo-links a { display: inline-flex; align-items: center; gap: 5px; color: var(--secondary); text-decoration: none; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) {
+  .demo-links a:hover, .demo-skip:hover { color: var(--ink); }
+}
+@media (max-width: 720px) {
+  .demo-tag { display: none; }
+  .demo-links span { display: none; }
+  .demo-intro { padding: 22px; }
+  .demo-intro h2 { font-size: 22px; }
+}
